@@ -5,11 +5,9 @@ use std::fs;
 use std::path::Path;
 
 pub fn execute(args: PlanArgs) -> Result<(), Box<dyn std::error::Error>> {
-    // Get the output directory (either from args or default)
     let output_dir = args.output_dir.as_deref().unwrap_or("terraform-plans");
     let output_path = Path::new(output_dir);
 
-    // Check if directory exists, if not create it
     if output_path.exists() {
         println!("📁 Using existing output directory: {}", output_dir);
     } else {
@@ -30,7 +28,7 @@ pub fn execute(args: PlanArgs) -> Result<(), Box<dyn std::error::Error>> {
             for module in &modules {
                 println!("{}", module);
             }
-            helpers::run_terraform_command(&modules, "plan", Some(output_dir))?;
+            helpers::run_terraform_plan(&modules, Some(output_dir))?;
         }
         Err(e) => {
             eprintln!("Error getting changed modules: {}", e);

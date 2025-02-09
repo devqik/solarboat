@@ -1,7 +1,7 @@
 use std::collections::HashMap;
-use std::path::Path;
 use std::process::Command;
 use crate::commands::scan::helpers;
+use crate::commands::plan::helpers as plan_helpers;
 
 #[derive(Debug)]
 pub struct ModuleError {
@@ -22,7 +22,12 @@ pub fn get_changed_modules(root_dir: &str) -> Result<Vec<String>, String> {
     Ok(affected_modules)
 }
 
-pub fn run_terraform_plan(modules: &[String], plan_dir: Option<&str>) -> Result<(), String> {
+pub fn run_terraform_apply(modules: &[String], dry_run: bool) -> Result<(), String> {
+    if dry_run {
+        println!("🔍 Running in dry-run mode - executing plan instead of apply");
+        return plan_helpers::run_terraform_plan(modules, None);
+    }
+
     let mut failed_modules = Vec::new();
 
     for module in modules {
@@ -45,31 +50,23 @@ pub fn run_terraform_plan(modules: &[String], plan_dir: Option<&str>) -> Result<
             continue;
         }
 
-        println!("  🚀 Running terraform plan...");
-        let mut terraform_cmd = Command::new("terraform");
-        terraform_cmd.arg("plan").current_dir(module);
-
-        if let Some(plan_dir) = plan_dir {
-            if let Some(module_name) = Path::new(module).file_name().and_then(|n| n.to_str()) {
-                let plan_file = Path::new(plan_dir).join(format!("{}.tfplan", module_name));
-                terraform_cmd.arg(format!("-out={}", plan_file.to_str().unwrap()));
-            }
-        }
-
-        let cmd_status = terraform_cmd
+        println!("  🚀 Running terraform apply...");
+        let cmd_status = Command::new("terraform")
+            .args(&["apply", "-auto-approve"])
+            .current_dir(module)
             .status()
             .map_err(|e| e.to_string())?;
 
         if !cmd_status.success() {
             failed_modules.push(ModuleError {
                 path: module.clone(),
-                command: "plan".to_string(),
-                error: "Plan failed".to_string(),
+                command: "apply".to_string(),
+                error: "Apply failed".to_string(),
             });
             continue;
         }
 
-        println!("  ✅ Module planned successfully");
+        println!("  ✅ Module applied successfully");
     }
 
     if !failed_modules.is_empty() {

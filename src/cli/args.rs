@@ -78,7 +78,7 @@ pub struct PlanArgs {
 pub struct ApplyArgs {
     #[clap(
         long,
-        default_value = "true",
+        default_value = "false",
         help = "Run in dry-run mode without applying changes",
         long_help = "When enabled, shows what would be applied without making actual changes."
     )]
