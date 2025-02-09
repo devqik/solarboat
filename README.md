@@ -137,6 +137,7 @@ jobs:
           fetch-depth: 0  # Important for detecting changes
 
       - name: Scan for Changes
+        if: github.event_name == 'pull_request'
         uses: devqik/solarboat-action@latest
         with:
           command: scan
@@ -169,8 +170,9 @@ This workflow will:
 
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
-| `command` | Command to run (`scan` or `plan`) | No | `scan` |
-| `output_dir` | Directory for terraform plan outputs | No | `terraform-plans` |
+| `command` | Command to run (`scan`, `plan`, or `apply`) | No | `scan` |
+| `plan_output_dir` | Directory for terraform plan outputs | No | `terraform-plans` |
+| `apply_dry_run` | Enable or disable solarboat apply in dry-run mode | No | `false` |
 | `github_token` | GitHub token for PR comments | Yes | N/A |
 
 #### Features
