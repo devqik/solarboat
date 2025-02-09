@@ -74,7 +74,7 @@ solarboat plan
 # Plan and save outputs to a specific directory
 solarboat plan --output-dir ./terraform-plans
 
-# Apply Terraform changes (with confirmation prompt)
+# Apply Terraform changes
 solarboat apply
 
 # Apply Terraform changes in dry-run mode (runs plan instead)
