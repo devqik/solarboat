@@ -172,7 +172,7 @@ This workflow will:
 |-------|-------------|----------|---------|
 | `command` | Command to run (`scan`, `plan`, or `apply`) | No | `scan` |
 | `plan_output_dir` | Directory for terraform plan outputs | No | `terraform-plans` |
-| `apply_dry_run` | Enable or disable solarboat apply in dry-run mode | No | `false` |
+| `apply_dry_run` | Enable or disable solarboat apply in dry-run mode | No | `true` |
 | `github_token` | GitHub token for PR comments | Yes | N/A |
 
 #### Features
