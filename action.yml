@@ -9,10 +9,14 @@ inputs:
     description: 'Command to run (scan or plan)'
     required: false
     default: 'scan'
-  output_dir:
+  plan_output_dir:
     description: 'Directory for terraform plan outputs'
     required: false
     default: 'terraform-plans'
+  apply_dry_run:
+    description: 'Enable or disable solarboat apply in dry-run mode'
+    required: false
+    default: 'true'
   github_token:
     description: 'GitHub token for PR comments'
     required: true
@@ -42,7 +46,10 @@ runs:
           solarboat scan
         elif [[ "${{ inputs.command }}" == "plan" ]]; then
           echo "📋 Running Terraform plan..."
-          solarboat plan --output-dir ${{ inputs.output_dir }}
+          solarboat plan --output-dir ${{ inputs.plan_output_dir }}
+        elif [[ "${{ inputs.command }}" == "apply" ]]; then
+          echo "🧱 Running Terraform apply..."
+          solarboat apply --dry-run=${{ inputs.apply_dry_run }}
         else
           echo "❌ Invalid command: ${{ inputs.command }}"
           exit 1

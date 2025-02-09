@@ -31,6 +31,13 @@ pub enum Commands {
                      handles both stateful and stateless modules appropriately."
     )]
     Plan(PlanArgs),
+
+    #[command(
+        about = "Apply Terraform changes",
+        long_about = "Applies Terraform changes for previously planned modules. \
+                     Can be run in dry-run mode for validation."
+    )]
+    Apply(ApplyArgs),
 }
 
 #[derive(Parser)]
@@ -65,4 +72,15 @@ pub struct PlanArgs {
                     The directory will be created if it doesn't exist."
     )]
     pub output_dir: Option<String>,
+}
+
+#[derive(Parser)]
+pub struct ApplyArgs {
+    #[clap(
+        long,
+        default_value = "false",
+        help = "Run in dry-run mode without applying changes",
+        long_help = "When enabled, shows what would be applied without making actual changes."
+    )]
+    pub dry_run: bool,
 }

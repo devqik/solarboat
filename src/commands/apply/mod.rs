@@ -1,4 +1,4 @@
 mod execute;
-pub(in crate::commands) mod helpers;
+mod helpers;
 
 pub use execute::execute;
