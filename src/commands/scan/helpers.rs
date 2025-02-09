@@ -128,8 +128,25 @@ pub fn find_module_dependencies(content: &str, current_dir: &str) -> Vec<String>
 pub fn has_backend_config(tf_files: &[fs::DirEntry]) -> bool {
     for file in tf_files {
         if let Ok(content) = fs::read_to_string(file.path()) {
-            if content.contains("backend") {
-                return true;
+            let lines: Vec<&str> = content.lines().collect();
+            let mut in_terraform_block = false;
+
+            for line in lines {
+                let trimmed_line = line.trim();
+                
+                if trimmed_line.starts_with("terraform") && trimmed_line.contains("{") {
+                    in_terraform_block = true;
+                    continue;
+                }
+
+                if in_terraform_block {
+                    if trimmed_line.starts_with("backend") && trimmed_line.contains("\"") {
+                        return true;
+                    }
+                    if trimmed_line == "}" {
+                        in_terraform_block = false;
+                    }
+                }
             }
         }
     }
