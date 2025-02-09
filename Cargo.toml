@@ -1,0 +1,23 @@
+[package]
+name = "solarboat"
+version = "0.1.4"
+edition = "2021"
+description = "A CLI tool for intelligent Terraform operations management with automatic dependency detection"
+license = "BSD-3-Clause"
+repository = "https://github.com/devqik/solarboat"
+homepage = "https://github.com/devqik/solarboat"
+documentation = "https://github.com/devqik/solarboat/wiki"
+authors = ["devqik"]
+keywords = ["terraform", "infrastructure", "cli", "gitops", "iac"]
+categories = ["command-line-utilities", "development-tools"]
+
+[lib]
+name = "solarboat"
+path = "src/lib.rs"
+
+[[bin]]
+name = "solarboat"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.0", features = ["derive"] }

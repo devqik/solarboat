@@ -1,0 +1,91 @@
+name: 'Solarboat Action'
+description: 'GitHub Action for Infrastructure as Code management with Solarboat CLI'
+branding:
+  icon: 'anchor'
+  color: 'blue'
+
+inputs:
+  command:
+    description: 'Command to run (scan or plan)'
+    required: false
+    default: 'scan'
+  output_dir:
+    description: 'Directory for terraform plan outputs'
+    required: false
+    default: 'terraform-plans'
+  github_token:
+    description: 'GitHub token for PR comments'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Install Solarboat CLI
+      shell: bash
+      run: |
+        # Install Solarboat CLI using cargo
+        cargo install solarboat
+        
+        # Verify installation
+        solarboat --version || (echo "Installation failed" && exit 1)
+
+    - name: Run Solarboat CLI
+      shell: bash
+      run: |
+        echo "🚀 Running Solarboat CLI"
+        
+        if [[ "${{ inputs.command }}" == "scan" ]]; then
+          echo "🔍 Scanning for changed modules..."
+          solarboat scan
+        elif [[ "${{ inputs.command }}" == "plan" ]]; then
+          echo "📋 Running Terraform plan..."
+          solarboat plan --output-dir ${{ inputs.output_dir }}
+        else
+          echo "❌ Invalid command: ${{ inputs.command }}"
+          exit 1
+        fi
+
+    - name: Upload Terraform Plans
+      if: inputs.command == 'plan'
+      uses: actions/upload-artifact@v4
+      with:
+        name: terraform-plans
+        path: ${{ inputs.output_dir }}/
+        retention-days: 5
+
+    - name: Comment on PR
+      if: github.event_name == 'pull_request' && inputs.command == 'plan'
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ inputs.github_token }}
+        script: |
+          const artifactUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}/artifacts`;
+          
+          const comment = `## 🚀 Solarboat CLI Results
+
+          Solarboat has analyzed your Terraform changes and generated plans.
+          
+          ### 📋 Summary
+          - ✨ Plans have been generated and uploaded as artifacts
+          - 🔍 Review the plans before merging
+          - ⏱️ Plans will be retained for 5 days
+          
+          ### 🔗 Links
+          - [View Plan Artifacts](${artifactUrl})
+          
+          ### ℹ️ Next Steps
+          1. Download and review the plan artifacts
+          2. Address any issues found in the plans
+          3. Merge the PR when ready
+          
+          > Note: Check the action logs for detailed module processing information.`;
+          
+          github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            body: comment
+          });
