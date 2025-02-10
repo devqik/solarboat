@@ -46,7 +46,7 @@ handles the operational journey so developers can focus on what they do best - w
 cargo install solarboat
 
 # Install a specific version
-cargo install solarboat --version 0.1.2
+cargo install solarboat --version 0.2.1
 ```
 
 ### Building from Source
