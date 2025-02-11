@@ -46,7 +46,7 @@ handles the operational journey so developers can focus on what they do best - w
 cargo install solarboat
 
 # Install a specific version
-cargo install solarboat --version 0.2.1
+cargo install solarboat --version 0.3.0
 ```
 
 ### Building from Source
@@ -74,11 +74,17 @@ solarboat plan
 # Plan and save outputs to a specific directory
 solarboat plan --output-dir ./terraform-plans
 
+# Plan changes while ignoring specific workspaces
+solarboat plan --ignore-workspaces dev,staging
+
 # Apply Terraform changes
 solarboat apply
 
 # Apply Terraform changes in dry-run mode (runs plan instead)
 solarboat apply --dry-run
+
+# Apply changes while ignoring specific workspaces
+solarboat apply --ignore-workspaces prod,staging
 ```
 
 ### Command Details
@@ -93,14 +99,18 @@ The scan command analyzes your repository for changed Terraform modules and thei
 #### Plan
 The plan command generates Terraform plans for changed modules. It:
 - Runs `terraform init` for each module
-- Generates detailed plans
+- Detects and handles multiple workspaces
+- Generates detailed plans for each workspace
+- Optionally skips specified workspaces
 - Optionally saves plans to a specified directory
 - Shows what changes would be made
 
 #### Apply
 The apply command implements the changes to your infrastructure. It:
 - Runs `terraform init` for each module
+- Detects and handles multiple workspaces
 - Supports dry-run mode for safety
+- Optionally skips specified workspaces
 - Automatically approves changes in CI/CD
 - Shows real-time progress
 
@@ -112,6 +122,15 @@ Solar Boat CLI recognizes two types of Terraform modules:
 - **Stateless Modules**: Reusable modules without state (no backend configuration)
 
 When changes are detected in stateless modules, the CLI automatically identifies and processes any stateful modules that depend on them.
+
+### Workspace Handling
+
+Solar Boat CLI provides intelligent workspace management for Terraform modules:
+
+- **Automatic Detection**: Automatically detects if a module has multiple workspaces
+- **Individual Processing**: Processes each workspace separately for both plan and apply operations
+- **Workspace Filtering**: Allows skipping specific workspaces using the `--ignore-workspaces` flag
+- **Default Workspace**: Handles modules with only the default workspace appropriately
 
 ### GitHub Actions Integration
 
@@ -170,18 +189,70 @@ This workflow will:
 
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
-| `command` | Command to run (`scan`, `plan`, or `apply`) | No | `scan` |
-| `plan_output_dir` | Directory for terraform plan outputs | No | `terraform-plans` |
-| `apply_dry_run` | Enable or disable solarboat apply in dry-run mode | No | `true` |
-| `github_token` | GitHub token for PR comments | Yes | N/A |
+| `command` | Command to run (`scan`, `plan`, or `apply`) | Yes | - |
+| `plan_output_dir` | Directory to save Terraform plan files | No | `terraform-plans` |
+| `apply_dry_run` | Run apply in dry-run mode | No | `true` |
+| `ignore_workspaces` | Comma-separated list of workspaces to ignore | No | `''` |
 
-#### Features
+#### Workflow Examples
 
-- **Automatic Plan Generation**: Generates Terraform plans for changed modules
-- **PR Comments**: Automatically comments on pull requests with plan results
-- **Artifact Upload**: Uploads plan files as artifacts for review
-- **Plan Retention**: Keeps plan artifacts for 5 days
-- **Change Detection**: Smart detection of changed Terraform modules
+**Basic Scan and Plan:**
+```yaml
+- name: Scan Changes
+  uses: devqik/solarboat@v0.3.0
+  with:
+    command: scan
+
+- name: Plan Changes
+  uses: devqik/solarboat@v0.3.0
+  with:
+    command: plan
+    plan_output_dir: my-plans
+```
+
+**Apply with Workspace Filtering:**
+```yaml
+- name: Apply Changes
+  uses: devqik/solarboat@v0.3.0
+  with:
+    command: apply
+    ignore_workspaces: dev,staging,test
+    apply_dry_run: true
+```
+
+**Complete Workflow with Conditions:**
+```yaml
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      # Run on all branches
+      - name: Plan Changes
+        uses: devqik/solarboat@v0.3.0
+        with:
+          command: plan
+          plan_output_dir: terraform-plans
+          ignore_workspaces: dev,staging
+      
+      # Run only on main branch
+      - name: Apply Changes
+        if: github.ref == 'refs/heads/main'
+        uses: devqik/solarboat@v0.3.0
+        with:
+          command: apply
+          ignore_workspaces: dev,staging
+
+      # Access plan artifacts
+      - name: Download Plans
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-plans
+          path: terraform-plans
+```
+
+The action automatically uploads Terraform plans as artifacts when using the `plan` command, making them available for review or use in subsequent workflow steps.
 
 #### PR Comment Example
 

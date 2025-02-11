@@ -22,7 +22,12 @@ pub fn get_changed_modules(root_dir: &str) -> Result<Vec<String>, String> {
     Ok(affected_modules)
 }
 
-pub fn run_terraform_plan(modules: &[String], plan_dir: Option<&str>) -> Result<(), String> {
+pub fn run_terraform_plan(
+    modules: &[String], 
+    plan_dir: Option<&str>,
+    ignore_workspaces: Option<&[String]>
+) -> Result<(), String> {
+
     let mut failed_modules = Vec::new();
 
     for module in modules {
@@ -59,6 +64,13 @@ pub fn run_terraform_plan(modules: &[String], plan_dir: Option<&str>) -> Result<
         } else {
             println!("  🌐 Found multiple workspaces: {:?}", workspaces);
             for workspace in workspaces {
+                if let Some(ignored) = ignore_workspaces {
+                    if ignored.contains(&workspace) {
+                        println!("  ⏭️  Skipping ignored workspace: {}", workspace);
+                        continue;
+                    }
+                }
+
                 println!("  🔄 Switching to workspace: {}", workspace);
                 select_workspace(module, &workspace)?;
                 

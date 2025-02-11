@@ -16,6 +16,8 @@ pub fn execute(args: PlanArgs) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let root_dir = &args.path;
+    let ignore_workspaces = args.ignore_workspaces.as_deref();
+
     match helpers::get_changed_modules(root_dir) {
         Ok(modules) => {
             println!("🔍 Found {} changed files", modules.len());
@@ -28,7 +30,7 @@ pub fn execute(args: PlanArgs) -> Result<(), Box<dyn std::error::Error>> {
             for module in &modules {
                 println!("{}", module);
             }
-            helpers::run_terraform_plan(&modules, Some(output_dir))?;
+            helpers::run_terraform_plan(&modules, Some(output_dir), ignore_workspaces)?;
         }
         Err(e) => {
             eprintln!("Error getting changed modules: {}", e);

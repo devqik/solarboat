@@ -22,10 +22,15 @@ pub fn get_changed_modules(root_dir: &str) -> Result<Vec<String>, String> {
     Ok(affected_modules)
 }
 
-pub fn run_terraform_apply(modules: &[String], dry_run: bool) -> Result<(), String> {
+pub fn run_terraform_apply(
+    modules: &[String], 
+    dry_run: bool,
+    ignore_workspaces: Option<&[String]>
+) -> Result<(), String> {
+    
     if dry_run {
         println!("🔍 Running in dry-run mode - executing plan instead of apply");
-        return plan_helpers::run_terraform_plan(modules, None);
+        return plan_helpers::run_terraform_plan(modules, None, ignore_workspaces);
     }
 
     let mut failed_modules = Vec::new();
@@ -64,6 +69,14 @@ pub fn run_terraform_apply(modules: &[String], dry_run: bool) -> Result<(), Stri
         } else {
             println!("  🌐 Found multiple workspaces: {:?}", workspaces);
             for workspace in workspaces {
+                // Skip ignored workspaces
+                if let Some(ignored) = ignore_workspaces {
+                    if ignored.contains(&workspace) {
+                        println!("  ⏭️  Skipping ignored workspace: {}", workspace);
+                        continue;
+                    }
+                }
+
                 println!("  🔄 Switching to workspace: {}", workspace);
                 plan_helpers::select_workspace(module, &workspace)?;
                 
