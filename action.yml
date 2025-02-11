@@ -1,22 +1,25 @@
-name: 'Solarboat Action'
-description: 'GitHub Action for Infrastructure as Code management with Solarboat CLI'
+name: 'Solarboat CLI Action'
+description: 'Run Solarboat CLI commands in your GitHub Actions workflow'
 branding:
   icon: 'anchor'
   color: 'blue'
 
 inputs:
   command:
-    description: 'Command to run (scan or plan)'
-    required: false
-    default: 'scan'
+    description: 'Command to run (scan, plan, or apply)'
+    required: true
   plan_output_dir:
-    description: 'Directory for terraform plan outputs'
-    required: false
+    description: 'Directory to save Terraform plan files'
     default: 'terraform-plans'
-  apply_dry_run:
-    description: 'Enable or disable solarboat apply in dry-run mode'
     required: false
+  apply_dry_run:
+    description: 'Run apply in dry-run mode'
     default: 'true'
+    required: false
+  ignore_workspaces:
+    description: 'Comma-separated list of workspaces to ignore'
+    required: false
+    default: ''
   github_token:
     description: 'GitHub token for PR comments'
     required: true
@@ -41,15 +44,18 @@ runs:
       run: |
         echo "🚀 Running Solarboat CLI"
         
+        # Build the ignore workspaces argument if provided
+        IGNORE_WORKSPACES_ARG=""
+        if [ ! -z "${{ inputs.ignore_workspaces }}" ]; then
+          IGNORE_WORKSPACES_ARG="--ignore-workspaces ${{ inputs.ignore_workspaces }}"
+        fi
+        
         if [[ "${{ inputs.command }}" == "scan" ]]; then
-          echo "🔍 Scanning for changed modules..."
           solarboat scan
         elif [[ "${{ inputs.command }}" == "plan" ]]; then
-          echo "📋 Running Terraform plan..."
-          solarboat plan --output-dir ${{ inputs.plan_output_dir }}
+          solarboat plan --output-dir ${{ inputs.plan_output_dir }} $IGNORE_WORKSPACES_ARG
         elif [[ "${{ inputs.command }}" == "apply" ]]; then
-          echo "🧱 Running Terraform apply..."
-          solarboat apply --dry-run=${{ inputs.apply_dry_run }}
+          solarboat apply --dry-run=${{ inputs.apply_dry_run }} $IGNORE_WORKSPACES_ARG
         else
           echo "❌ Invalid command: ${{ inputs.command }}"
           exit 1
@@ -60,7 +66,7 @@ runs:
       uses: actions/upload-artifact@v4
       with:
         name: terraform-plans
-        path: ${{ inputs.output_dir }}/
+        path: ${{ inputs.plan_output_dir }}/
         retention-days: 5
 
     - name: Comment on PR

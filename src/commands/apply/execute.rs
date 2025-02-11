@@ -8,15 +8,16 @@ pub fn execute(args: ApplyArgs) -> Result<(), Box<dyn std::error::Error>> {
         println!("🔍 Running in dry-run mode - no changes will be applied");
     }
 
-    let root_dir = ".";
-    match helpers::get_changed_modules(root_dir) {
+    let ignore_workspaces = args.ignore_workspaces.as_deref();
+
+    match helpers::get_changed_modules(".") {
         Ok(modules) => {
+            println!("🔍 Found {} changed files", modules.len());
             if modules.is_empty() {
-                println!("🎉 No modules to apply!");
+                println!("🎉 No modules were changed!");
                 return Ok(());
             }
-
-            println!("📦 Modules to apply:");
+            println!("📦 Changed modules...");
             println!("---------------------------------");
             for module in &modules {
                 println!("{}", module);
@@ -35,7 +36,7 @@ pub fn execute(args: ApplyArgs) -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
 
-            helpers::run_terraform_apply(&modules, args.dry_run)?;
+            helpers::run_terraform_apply(&modules, args.dry_run, ignore_workspaces)?;
             
             if args.dry_run {
                 println!("\n🔍 Dry run completed - no changes were applied");

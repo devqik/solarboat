@@ -72,6 +72,16 @@ pub struct PlanArgs {
                     The directory will be created if it doesn't exist."
     )]
     pub output_dir: Option<String>,
+
+    #[clap(
+        long,
+        value_delimiter = ',',
+        help = "Comma-separated list of workspace names to ignore",
+        long_help = "Specify workspace names to skip during plan operation. \
+                    Multiple workspaces can be provided as comma-separated values. \
+                    Example: --ignore-workspaces dev,staging"
+    )]
+    pub ignore_workspaces: Option<Vec<String>>,
 }
 
 #[derive(Parser)]
@@ -83,4 +93,14 @@ pub struct ApplyArgs {
         long_help = "When enabled, shows what would be applied without making actual changes."
     )]
     pub dry_run: bool,
+
+    #[clap(
+        long,
+        value_delimiter = ',',
+        help = "Comma-separated list of workspace names to ignore",
+        long_help = "Specify workspace names to skip during apply operation. \
+                    Multiple workspaces can be provided as comma-separated values. \
+                    Example: --ignore-workspaces dev,staging"
+    )]
+    pub ignore_workspaces: Option<Vec<String>>,
 }
