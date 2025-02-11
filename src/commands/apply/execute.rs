@@ -5,7 +5,9 @@ use std::io;
 pub fn execute(args: ApplyArgs) -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 Starting Terraform apply...");
     if args.dry_run {
-        println!("🔍 Running in dry-run mode - no changes will be applied");
+        println!("🔍 Running in dry-run mode (default) - no changes will be applied");
+    } else {
+        println!("⚠️  Running in APPLY mode - changes will be applied!");
     }
 
     let ignore_workspaces = args.ignore_workspaces.as_deref();

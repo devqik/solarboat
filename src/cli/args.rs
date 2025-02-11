@@ -35,7 +35,7 @@ pub enum Commands {
     #[command(
         about = "Apply Terraform changes",
         long_about = "Applies Terraform changes for previously planned modules. \
-                     Can be run in dry-run mode for validation."
+                     Runs in dry-run mode by default for safety. Use --dry-run=false to apply actual changes."
     )]
     Apply(ApplyArgs),
 }
@@ -88,9 +88,10 @@ pub struct PlanArgs {
 pub struct ApplyArgs {
     #[clap(
         long,
-        default_value = "false",
+        default_value = "true",
         help = "Run in dry-run mode without applying changes",
-        long_help = "When enabled, shows what would be applied without making actual changes."
+        long_help = "When enabled, shows what would be applied without making actual changes. \
+                    Enabled by default for safety. Use --dry-run=false to perform actual changes."
     )]
     pub dry_run: bool,
 

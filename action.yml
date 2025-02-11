@@ -13,7 +13,7 @@ inputs:
     default: 'terraform-plans'
     required: false
   apply_dry_run:
-    description: 'Run apply in dry-run mode'
+    description: 'Run apply in dry-run mode (enabled by default for safety)'
     default: 'true'
     required: false
   ignore_workspaces:

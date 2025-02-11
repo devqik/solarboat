@@ -77,11 +77,11 @@ solarboat plan --output-dir ./terraform-plans
 # Plan changes while ignoring specific workspaces
 solarboat plan --ignore-workspaces dev,staging
 
-# Apply Terraform changes
+# Apply Terraform changes (dry-run mode by default)
 solarboat apply
 
-# Apply Terraform changes in dry-run mode (runs plan instead)
-solarboat apply --dry-run
+# Apply actual Terraform changes
+solarboat apply --dry-run=false
 
 # Apply changes while ignoring specific workspaces
 solarboat apply --ignore-workspaces prod,staging
@@ -219,7 +219,6 @@ This workflow will:
     ignore_workspaces: dev,staging,test
     apply_dry_run: true
 ```
-
 **Complete Workflow with Conditions:**
 ```yaml
 jobs:
@@ -285,3 +284,4 @@ This project is licensed under the BSD-3-Clause License - see the [LICENSE](LICE
 Special thanks to all contributors who help make this project better! Whether you're fixing bugs, improving documentation, or suggesting features, your contributions are greatly appreciated.
 
 ~ @devqik (Creator)
+
