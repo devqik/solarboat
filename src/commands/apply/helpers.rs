@@ -58,7 +58,7 @@ pub fn run_terraform_apply(
         let workspaces = plan_helpers::get_workspaces(module)?;
         
         if workspaces.len() <= 1 {
-            println!("  🚀 Running terraform apply for default workspace...");
+            println!("  🧱 Running terraform apply for default workspace...");
             if !run_single_apply(module)? {
                 failed_modules.push(ModuleError {
                     path: module.clone(),
@@ -80,7 +80,7 @@ pub fn run_terraform_apply(
                 println!("  🔄 Switching to workspace: {}", workspace);
                 plan_helpers::select_workspace(module, &workspace)?;
                 
-                println!("  🚀 Running terraform apply for workspace {}...", workspace);
+                println!("  🧱 Running terraform apply for workspace {}...", workspace);
                 if !run_single_apply(module)? {
                     failed_modules.push(ModuleError {
                         path: format!("{}:{}", module, workspace),

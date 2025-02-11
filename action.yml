@@ -51,13 +51,10 @@ runs:
         fi
         
         if [[ "${{ inputs.command }}" == "scan" ]]; then
-          echo "🔍 Scanning for changed modules..."
           solarboat scan
         elif [[ "${{ inputs.command }}" == "plan" ]]; then
-          echo "📋 Running Terraform plan..."
           solarboat plan --output-dir ${{ inputs.plan_output_dir }} $IGNORE_WORKSPACES_ARG
         elif [[ "${{ inputs.command }}" == "apply" ]]; then
-          echo "🧱 Running Terraform apply..."
           solarboat apply --dry-run=${{ inputs.apply_dry_run }} $IGNORE_WORKSPACES_ARG
         else
           echo "❌ Invalid command: ${{ inputs.command }}"
