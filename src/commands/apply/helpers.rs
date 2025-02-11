@@ -50,23 +50,33 @@ pub fn run_terraform_apply(modules: &[String], dry_run: bool) -> Result<(), Stri
             continue;
         }
 
-        println!("  🚀 Running terraform apply...");
-        let cmd_status = Command::new("terraform")
-            .args(&["apply", "-auto-approve"])
-            .current_dir(module)
-            .status()
-            .map_err(|e| e.to_string())?;
-
-        if !cmd_status.success() {
-            failed_modules.push(ModuleError {
-                path: module.clone(),
-                command: "apply".to_string(),
-                error: "Apply failed".to_string(),
-            });
-            continue;
+        let workspaces = plan_helpers::get_workspaces(module)?;
+        
+        if workspaces.len() <= 1 {
+            println!("  🚀 Running terraform apply for default workspace...");
+            if !run_single_apply(module)? {
+                failed_modules.push(ModuleError {
+                    path: module.clone(),
+                    command: "apply".to_string(),
+                    error: "Apply failed".to_string(),
+                });
+            }
+        } else {
+            println!("  🌐 Found multiple workspaces: {:?}", workspaces);
+            for workspace in workspaces {
+                println!("  🔄 Switching to workspace: {}", workspace);
+                plan_helpers::select_workspace(module, &workspace)?;
+                
+                println!("  🚀 Running terraform apply for workspace {}...", workspace);
+                if !run_single_apply(module)? {
+                    failed_modules.push(ModuleError {
+                        path: format!("{}:{}", module, workspace),
+                        command: "apply".to_string(),
+                        error: format!("Apply failed for workspace {}", workspace),
+                    });
+                }
+            }
         }
-
-        println!("  ✅ Module applied successfully");
     }
 
     if !failed_modules.is_empty() {
@@ -78,4 +88,14 @@ pub fn run_terraform_apply(modules: &[String], dry_run: bool) -> Result<(), Stri
     }
 
     Ok(())
+}
+
+fn run_single_apply(module: &str) -> Result<bool, String> {
+    let cmd_status = Command::new("terraform")
+        .args(&["apply", "-auto-approve"])
+        .current_dir(module)
+        .status()
+        .map_err(|e| e.to_string())?;
+
+    Ok(cmd_status.success())
 }
