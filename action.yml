@@ -30,6 +30,11 @@ runs:
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
 
+    - name: Install Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: "1.7.4"
+
     - name: Install Solarboat CLI
       shell: bash
       run: |
