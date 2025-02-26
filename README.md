@@ -46,7 +46,7 @@ handles the operational journey so developers can focus on what they do best - w
 cargo install solarboat
 
 # Install a specific version
-cargo install solarboat --version 0.3.0
+cargo install solarboat --version 0.3.1
 ```
 
 ### Building from Source
@@ -199,12 +199,12 @@ This workflow will:
 **Basic Scan and Plan:**
 ```yaml
 - name: Scan Changes
-  uses: devqik/solarboat@v0.3.0
+  uses: devqik/solarboat@v0.3.1
   with:
     command: scan
 
 - name: Plan Changes
-  uses: devqik/solarboat@v0.3.0
+  uses: devqik/solarboat@v0.3.1
   with:
     command: plan
     plan_output_dir: my-plans
@@ -213,7 +213,7 @@ This workflow will:
 **Apply with Workspace Filtering:**
 ```yaml
 - name: Apply Changes
-  uses: devqik/solarboat@v0.3.0
+  uses: devqik/solarboat@v0.3.1
   with:
     command: apply
     ignore_workspaces: dev,staging,test
@@ -229,7 +229,7 @@ jobs:
       
       # Run on all branches
       - name: Plan Changes
-        uses: devqik/solarboat@v0.3.0
+        uses: devqik/solarboat@v0.3.1
         with:
           command: plan
           plan_output_dir: terraform-plans
@@ -238,7 +238,7 @@ jobs:
       # Run only on main branch
       - name: Apply Changes
         if: github.ref == 'refs/heads/main'
-        uses: devqik/solarboat@v0.3.0
+        uses: devqik/solarboat@v0.3.1
         with:
           command: apply
           ignore_workspaces: dev,staging
