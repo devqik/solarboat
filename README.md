@@ -46,7 +46,7 @@ handles the operational journey so developers can focus on what they do best - w
 cargo install solarboat
 
 # Install a specific version
-cargo install solarboat --version 0.3.1
+cargo install solarboat --version 0.3.2
 ```
 
 ### Building from Source
@@ -77,6 +77,9 @@ solarboat plan --output-dir ./terraform-plans
 # Plan changes while ignoring specific workspaces
 solarboat plan --ignore-workspaces dev,staging
 
+# Force plan for all stateful modules regardless of changes
+solarboat plan --force
+
 # Apply Terraform changes (dry-run mode by default)
 solarboat apply
 
@@ -85,6 +88,9 @@ solarboat apply --dry-run=false
 
 # Apply changes while ignoring specific workspaces
 solarboat apply --ignore-workspaces prod,staging
+
+# Force apply for all stateful modules regardless of changes
+solarboat apply --force
 ```
 
 ### Command Details
@@ -104,6 +110,7 @@ The plan command generates Terraform plans for changed modules. It:
 - Optionally skips specified workspaces
 - Optionally saves plans to a specified directory
 - Shows what changes would be made
+- Can force plan all stateful modules with `--force` flag
 
 #### Apply
 The apply command implements the changes to your infrastructure. It:
@@ -113,6 +120,7 @@ The apply command implements the changes to your infrastructure. It:
 - Optionally skips specified workspaces
 - Automatically approves changes in CI/CD
 - Shows real-time progress
+- Can force apply all stateful modules with `--force` flag
 
 ### Module Types
 
@@ -199,12 +207,12 @@ This workflow will:
 **Basic Scan and Plan:**
 ```yaml
 - name: Scan Changes
-  uses: devqik/solarboat@v0.3.1
+  uses: devqik/solarboat@v0.3.2
   with:
     command: scan
 
 - name: Plan Changes
-  uses: devqik/solarboat@v0.3.1
+  uses: devqik/solarboat@v0.3.2
   with:
     command: plan
     plan_output_dir: my-plans
@@ -213,7 +221,7 @@ This workflow will:
 **Apply with Workspace Filtering:**
 ```yaml
 - name: Apply Changes
-  uses: devqik/solarboat@v0.3.1
+  uses: devqik/solarboat@v0.3.2
   with:
     command: apply
     ignore_workspaces: dev,staging,test
@@ -229,7 +237,7 @@ jobs:
       
       # Run on all branches
       - name: Plan Changes
-        uses: devqik/solarboat@v0.3.1
+        uses: devqik/solarboat@v0.3.2
         with:
           command: plan
           plan_output_dir: terraform-plans
@@ -238,7 +246,7 @@ jobs:
       # Run only on main branch
       - name: Apply Changes
         if: github.ref == 'refs/heads/main'
-        uses: devqik/solarboat@v0.3.1
+        uses: devqik/solarboat@v0.3.2
         with:
           command: apply
           ignore_workspaces: dev,staging
@@ -281,7 +289,13 @@ This project is licensed under the BSD-3-Clause License - see the [LICENSE](LICE
 
 ## Acknowledgments 🙏
 
-Special thanks to all contributors who help make this project better! Whether you're fixing bugs, improving documentation, or suggesting features, your contributions are greatly appreciated.
+This project needs your support! If you find Solar Boat CLI useful, please consider:
+- ⭐ Starring the project on GitHub
+- 🛠️ Contributing with code, documentation, or bug reports
+- 💡 Suggesting new features or improvements
+- 🌟 Sharing it with other developers
+
+Your support will help make this project better and encourage its continued development.
 
 ~ @devqik (Creator)
 

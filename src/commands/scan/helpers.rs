@@ -11,11 +11,21 @@ pub struct Module {
     is_stateful: bool,
 }
 
-pub fn get_changed_modules(root_dir: &str) -> Result<Vec<String>, String> {
+pub fn get_changed_modules(root_dir: &str, force: bool) -> Result<Vec<String>, String> {
     let mut modules = HashMap::new();
 
     discover_modules(root_dir, &mut modules)?;
     build_dependency_graph(&mut modules)?;
+
+    if force {
+        // If force is true, return all stateful modules
+        let stateful_modules: Vec<String> = modules
+            .iter()
+            .filter(|(_, module)| module.is_stateful)
+            .map(|(path, _)| path.clone())
+            .collect();
+        return Ok(stateful_modules);
+    }
 
     let changed_files = get_git_changed_files(root_dir)?;
     let affected_modules = process_changed_modules(&changed_files, &mut modules)?;

@@ -3,8 +3,7 @@ use super::helpers;
 use std::io;
 
 pub fn execute(args: ScanArgs) -> Result<(), Box<dyn std::error::Error>> {
-    // Use the path argument from ScanArgs
-    match helpers::get_changed_modules(&args.path) {
+    match helpers::get_changed_modules(&args.path, false) {
         Ok(modules) => {
             println!("🔍 Found {} changed files", modules.len());
             if modules.is_empty() {

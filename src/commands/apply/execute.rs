@@ -12,14 +12,19 @@ pub fn execute(args: ApplyArgs) -> Result<(), Box<dyn std::error::Error>> {
 
     let ignore_workspaces = args.ignore_workspaces.as_deref();
 
-    match helpers::get_changed_modules(".") {
+    match helpers::get_changed_modules(&args.path, args.force) {
         Ok(modules) => {
-            println!("🔍 Found {} changed files", modules.len());
-            if modules.is_empty() {
-                println!("🎉 No modules were changed!");
-                return Ok(());
+            if args.force {
+                println!("🔍 Found {} stateful modules", modules.len());
+                println!("📦 All stateful modules will be applied...");
+            } else {
+                println!("🔍 Found {} changed files", modules.len());
+                if modules.is_empty() {
+                    println!("🎉 No modules were changed!");
+                    return Ok(());
+                }
+                println!("📦 Changed modules...");
             }
-            println!("📦 Changed modules...");
             println!("---------------------------------");
             for module in &modules {
                 println!("{}", module);

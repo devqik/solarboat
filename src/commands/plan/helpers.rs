@@ -10,7 +10,7 @@ pub struct ModuleError {
     error: String,
 }
 
-pub fn get_changed_modules(root_dir: &str) -> Result<Vec<String>, String> {
+pub fn get_changed_modules(root_dir: &str, _force: bool) -> Result<Vec<String>, String> {
     let mut modules = HashMap::new();
 
     helpers::discover_modules(root_dir, &mut modules)?;

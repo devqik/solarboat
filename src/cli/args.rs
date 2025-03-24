@@ -82,16 +82,33 @@ pub struct PlanArgs {
                     Example: --ignore-workspaces dev,staging"
     )]
     pub ignore_workspaces: Option<Vec<String>>,
+
+    #[clap(
+        long,
+        help = "Force plan for all stateful modules regardless of changes",
+        long_help = "When enabled, this flag will generate plans for all stateful modules \
+                    in the specified directory, regardless of whether they have been changed."
+    )]
+    pub force: bool,
 }
 
 #[derive(Parser)]
 pub struct ApplyArgs {
     #[clap(
         long,
+        default_value = ".",
+        help = "Root directory containing Terraform modules",
+        long_help = "The root directory containing Terraform modules to be applied. \
+                    The command will recursively search for changed modules in this directory."
+    )]
+    pub path: String,
+
+    #[clap(
+        long,
         default_value = "true",
-        help = "Run in dry-run mode without applying changes",
-        long_help = "When enabled, shows what would be applied without making actual changes. \
-                    Enabled by default for safety. Use --dry-run=false to perform actual changes."
+        help = "Run in dry-run mode (no changes will be applied)",
+        long_help = "When enabled (default), this flag will run the apply command in dry-run mode, \
+                    showing what changes would be made without actually applying them."
     )]
     pub dry_run: bool,
 
@@ -104,4 +121,12 @@ pub struct ApplyArgs {
                     Example: --ignore-workspaces dev,staging"
     )]
     pub ignore_workspaces: Option<Vec<String>>,
+
+    #[clap(
+        long,
+        help = "Force apply for all stateful modules regardless of changes",
+        long_help = "When enabled, this flag will apply changes for all stateful modules \
+                    in the specified directory, regardless of whether they have been changed."
+    )]
+    pub force: bool,
 }
