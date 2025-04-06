@@ -50,6 +50,14 @@ pub struct ScanArgs {
                     The scan will recursively search for .tf files in this directory and its subdirectories."
     )]
     pub path: String,
+
+    #[clap(
+        long,
+        help = "Force scan for all stateful modules regardless of changes",
+        long_help = "When enabled, this flag will scan all stateful modules \
+                    in the specified directory, regardless of whether they have been changed."
+    )]
+    pub force: bool,
 }
 
 #[derive(Parser)]

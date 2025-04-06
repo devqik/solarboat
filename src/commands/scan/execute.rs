@@ -3,14 +3,19 @@ use super::helpers;
 use std::io;
 
 pub fn execute(args: ScanArgs) -> Result<(), Box<dyn std::error::Error>> {
-    match helpers::get_changed_modules(&args.path, false) {
+    match helpers::get_changed_modules(&args.path, args.force) {
         Ok(modules) => {
-            println!("🔍 Found {} changed files", modules.len());
-            if modules.is_empty() {
-                println!("🎉 No modules were changed!");
-                return Ok(());
+            if args.force {
+                println!("🔍 Found {} stateful modules", modules.len());
+                println!("📦 All stateful modules will be scanned...");
+            } else {
+                println!("🔍 Found {} changed files", modules.len());
+                if modules.is_empty() {
+                    println!("🎉 No modules were changed!");
+                    return Ok(());
+                }
+                println!("📦 Changed modules...");
             }
-            println!("📦 Changed modules...");
             println!("---------------------------------");
             for module in modules {
                 println!("{}", module);

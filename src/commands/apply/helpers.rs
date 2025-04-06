@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::process::Command;
 use crate::commands::scan::helpers;
 use crate::commands::plan::helpers as plan_helpers;
@@ -10,16 +9,9 @@ pub struct ModuleError {
     error: String,
 }
 
-pub fn get_changed_modules(root_dir: &str, _force: bool) -> Result<Vec<String>, String> {
-    let mut modules = HashMap::new();
-
-    helpers::discover_modules(root_dir, &mut modules)?;
-    helpers::build_dependency_graph(&mut modules)?;
-
-    let changed_files = helpers::get_git_changed_files(root_dir)?;
-    let affected_modules = helpers::process_changed_modules(&changed_files, &mut modules)?;
-
-    Ok(affected_modules)
+pub fn get_changed_modules(root_dir: &str, force: bool) -> Result<Vec<String>, String> {
+    // Use the scan helpers' get_changed_modules function directly
+    helpers::get_changed_modules(root_dir, force)
 }
 
 pub fn run_terraform_apply(

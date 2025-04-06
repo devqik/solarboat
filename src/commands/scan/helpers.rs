@@ -39,6 +39,9 @@ pub fn discover_modules(root_dir: &str, modules: &mut HashMap<String, Module>) -
         let path = entry.path();
 
         if path.is_dir() {
+            // Recursively search subdirectories
+            discover_modules(path.to_str().ok_or("Invalid path")?, modules)?;
+
             let tf_files: Vec<_> = fs::read_dir(&path)
                 .map_err(|e| e.to_string())?
                 .filter_map(|e| e.ok())
@@ -51,7 +54,7 @@ pub fn discover_modules(root_dir: &str, modules: &mut HashMap<String, Module>) -
 
                 modules.entry(abs_path_str.clone()).or_insert(Module {
                     path: abs_path_str,
-                    is_stateful: !has_backend_config(&tf_files),
+                    is_stateful: has_backend_config(&tf_files),
                     ..Default::default()
                 });
             }
@@ -136,60 +139,195 @@ pub fn find_module_dependencies(content: &str, current_dir: &str) -> Vec<String>
 }
 
 pub fn has_backend_config(tf_files: &[fs::DirEntry]) -> bool {
+    // Check if this module refers to other modules (has module blocks)
+    let has_module_blocks = tf_files.iter().any(|file| {
+        if let Ok(content) = fs::read_to_string(file.path()) {
+            let lines: Vec<&str> = content.lines().collect();
+            for line in lines {
+                let trimmed_line = line.trim();
+                if trimmed_line.starts_with("module") && trimmed_line.contains("{") {
+                    return true;
+                }
+            }
+        }
+        false
+    });
+    
+    if has_module_blocks {
+        return true; // This module refers to other modules, so it's stateful
+    }
+    
+    // Check if this module has a remote backend or local state files
     for file in tf_files {
         if let Ok(content) = fs::read_to_string(file.path()) {
             let lines: Vec<&str> = content.lines().collect();
             let mut in_terraform_block = false;
-
+            let mut brace_count = 0;
+            
             for line in lines {
                 let trimmed_line = line.trim();
                 
-                if trimmed_line.starts_with("terraform") && trimmed_line.contains("{") {
-                    in_terraform_block = true;
+                // Skip empty lines and comments
+                if trimmed_line.is_empty() || trimmed_line.starts_with('#') || trimmed_line.starts_with("//") {
                     continue;
                 }
-
-                if in_terraform_block {
-                    if trimmed_line.starts_with("backend") && trimmed_line.contains("\"") {
-                        return true;
-                    }
-                    if trimmed_line == "}" {
+                
+                // Check for terraform block start
+                if trimmed_line.starts_with("terraform") && trimmed_line.contains("{") {
+                    in_terraform_block = true;
+                    brace_count += 1;
+                    continue;
+                }
+                
+                // Check for backend block start while in terraform block
+                if in_terraform_block && trimmed_line.starts_with("backend") && trimmed_line.contains("\"") {
+                    return true; // Found a backend block, this is a stateful module
+                }
+                
+                // Count braces to track block nesting
+                if trimmed_line.contains("{") {
+                    brace_count += 1;
+                }
+                if trimmed_line.contains("}") {
+                    brace_count -= 1;
+                    if brace_count == 0 {
                         in_terraform_block = false;
                     }
                 }
             }
         }
     }
+    
+    // Check for local state files
+    if let Some(first_file) = tf_files.first() {
+        if let Some(dir_path) = first_file.path().parent() {
+            if let Ok(entries) = fs::read_dir(dir_path) {
+                for entry in entries.filter_map(|e| e.ok()) {
+                    let path = entry.path();
+                    if path.is_file() && path.extension().map_or(false, |ext| ext == "tfstate") {
+                        return true; // Found a local state file, this is a stateful module
+                    }
+                }
+            }
+        }
+    }
+    
+    // If we didn't find module blocks, backend blocks, or state files, this is a stateless module
     false
 }
 
 pub fn get_git_changed_files(root_dir: &str) -> Result<Vec<String>, String> {
-    let output = Command::new("git")
+    // First, try to get the merge-base with origin/main
+    let merge_base_output = Command::new("git")
+        .args(&["merge-base", "origin/main", "HEAD"])
+        .current_dir(root_dir)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    let merge_base = if merge_base_output.status.success() {
+        String::from_utf8_lossy(&merge_base_output.stdout).trim().to_string()
+    } else {
+        // If origin/main is not available, try with local main
+        let local_merge_base = Command::new("git")
+            .args(&["merge-base", "main", "HEAD"])
+            .current_dir(root_dir)
+            .output()
+            .map_err(|e| e.to_string())?;
+            
+        if !local_merge_base.status.success() {
+            // If we can't find a merge base, just use HEAD
+            return get_all_tf_files(root_dir);
+        }
+        String::from_utf8_lossy(&local_merge_base.stdout).trim().to_string()
+    };
+
+    // Get both staged and unstaged changes
+    let mut changed_files = Vec::new();
+
+    // Get uncommitted changes
+    let status_output = Command::new("git")
         .arg("status")
         .arg("--porcelain")
         .current_dir(root_dir)
         .output()
         .map_err(|e| e.to_string())?;
 
-    if !output.status.success() {
-        return Err("Failed to get git status".to_string());
+    if status_output.status.success() {
+        changed_files.extend(
+            String::from_utf8_lossy(&status_output.stdout)
+                .lines()
+                .filter(|line| line.ends_with(".tf"))
+                .map(|line| {
+                    let file = line[3..].trim();
+                    fs::canonicalize(Path::new(root_dir).join(file))
+                        .map_err(|e| e.to_string())
+                        .unwrap()
+                        .to_str()
+                        .unwrap()
+                        .to_string()
+                })
+        );
     }
 
-    let changed_files: Vec<String> = String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .filter(|line| line.ends_with(".tf"))
-        .map(|line| {
-            let file = line[3..].trim();
-            fs::canonicalize(Path::new(root_dir).join(file))
-                .map_err(|e| e.to_string())
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .to_string()
-        })
-        .collect();
+    // Get changes between current branch and merge-base
+    let diff_output = Command::new("git")
+        .args(&["diff", "--name-only", &merge_base])
+        .current_dir(root_dir)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if diff_output.status.success() {
+        changed_files.extend(
+            String::from_utf8_lossy(&diff_output.stdout)
+                .lines()
+                .filter(|line| line.ends_with(".tf"))
+                .map(|line| {
+                    fs::canonicalize(Path::new(root_dir).join(line))
+                        .map_err(|e| e.to_string())
+                        .unwrap()
+                        .to_str()
+                        .unwrap()
+                        .to_string()
+                })
+        );
+    }
+
+    // If no changes were found, return all .tf files
+    if changed_files.is_empty() {
+        return get_all_tf_files(root_dir);
+    }
+
+    // Remove duplicates
+    changed_files.sort();
+    changed_files.dedup();
 
     Ok(changed_files)
+}
+
+// Helper function to get all .tf files in a directory
+fn get_all_tf_files(root_dir: &str) -> Result<Vec<String>, String> {
+    let mut tf_files = Vec::new();
+    
+    fn find_tf_files(dir: &Path, files: &mut Vec<String>) -> Result<(), String> {
+        for entry in fs::read_dir(dir).map_err(|e| e.to_string())? {
+            let entry = entry.map_err(|e| e.to_string())?;
+            let path = entry.path();
+            
+            if path.is_dir() {
+                find_tf_files(&path, files)?;
+            } else if path.extension().map_or(false, |ext| ext == "tf") {
+                if let Ok(abs_path) = fs::canonicalize(&path) {
+                    if let Some(abs_path_str) = abs_path.to_str() {
+                        files.push(abs_path_str.to_string());
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+    
+    find_tf_files(Path::new(root_dir), &mut tf_files)?;
+    Ok(tf_files)
 }
 
 pub fn process_changed_modules(changed_files: &[String], modules: &mut HashMap<String, Module>) -> Result<Vec<String>, String> {
@@ -218,12 +356,20 @@ pub fn mark_module_changed(module_path: &str, all_modules: &mut HashMap<String, 
 
     if let Some(module) = all_modules.get(module_path) {
         if module.is_stateful {
+            // Add this stateful module to affected modules
+            affected_modules.push(module_path.to_string());
+            
+            // Also mark all modules that depend on this one
             let user_paths: Vec<String> = module.used_by.clone();
             for user_path in user_paths {
                 mark_module_changed(&user_path, all_modules, affected_modules, processed);
             }
         } else {
-            affected_modules.push(module_path.to_string());
+            // For non-stateful modules, only mark their dependents
+            let user_paths: Vec<String> = module.used_by.clone();
+            for user_path in user_paths {
+                mark_module_changed(&user_path, all_modules, affected_modules, processed);
+            }
         }
     }
 }
