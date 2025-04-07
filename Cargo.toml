@@ -21,3 +21,4 @@ path = "src/main.rs"
 
 [dependencies]
 clap = { version = "4.0", features = ["derive"] }
+regex = "1.10.2"
