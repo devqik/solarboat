@@ -5,7 +5,6 @@ use std::process::Command;
 
 #[derive(Debug, Default)]
 pub struct Module {
-    path: String,
     depends_on: Vec<String>,
     used_by: Vec<String>,
     is_stateful: bool,
@@ -78,7 +77,6 @@ pub fn discover_modules(root_dir: &str, modules: &mut HashMap<String, Module>) -
                 let abs_path_str = abs_path.to_str().ok_or("Invalid path")?.to_string();
 
                 modules.entry(abs_path_str.clone()).or_insert(Module {
-                    path: abs_path_str,
                     is_stateful: has_backend_config(&tf_files),
                     ..Default::default()
                 });
@@ -346,47 +344,6 @@ pub fn get_git_changed_files(root_dir: &str) -> Result<Vec<String>, String> {
     changed_files.dedup();
 
     Ok(changed_files)
-}
-
-// Helper function to get all .tf files in a directory
-fn get_all_tf_files(root_dir: &str) -> Result<Vec<String>, String> {
-    let mut tf_files = Vec::new();
-    
-    fn find_tf_files(dir: &Path, files: &mut Vec<String>) -> Result<(), String> {
-        // Check if the directory exists
-        if !dir.exists() {
-            return Ok(());
-        }
-        
-        for entry in fs::read_dir(dir).map_err(|e| e.to_string())? {
-            let entry = entry.map_err(|e| e.to_string())?;
-            let path = entry.path();
-            
-            if path.is_dir() {
-                find_tf_files(&path, files)?;
-            } else if path.extension().map_or(false, |ext| ext == "tf") {
-                if let Ok(abs_path) = fs::canonicalize(&path) {
-                    if let Some(abs_path_str) = abs_path.to_str() {
-                        files.push(abs_path_str.to_string());
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-    
-    // Check if the root_dir exists
-    let root_path = Path::new(root_dir);
-    if root_path.exists() {
-        find_tf_files(root_path, &mut tf_files)?;
-    } else {
-        // If the root_dir doesn't exist, use the current directory
-        let current_dir = std::env::current_dir().map_err(|e| e.to_string())?;
-        let full_path = current_dir.join(root_dir);
-        find_tf_files(&full_path, &mut tf_files)?;
-    }
-    
-    Ok(tf_files)
 }
 
 pub fn process_changed_modules(changed_files: &[String], modules: &mut HashMap<String, Module>) -> Result<Vec<String>, String> {
