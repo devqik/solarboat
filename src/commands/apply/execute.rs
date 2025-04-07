@@ -10,9 +10,10 @@ pub fn execute(args: ApplyArgs) -> Result<(), Box<dyn std::error::Error>> {
         println!("⚠️  Running in APPLY mode - changes will be applied!");
     }
 
+    let root_dir = &args.path;
     let ignore_workspaces = args.ignore_workspaces.as_deref();
 
-    match helpers::get_changed_modules(&args.path, args.force) {
+    match helpers::get_changed_modules(root_dir, args.force) {
         Ok(modules) => {
             if args.force {
                 println!("🔍 Found {} stateful modules", modules.len());
@@ -30,6 +31,33 @@ pub fn execute(args: ApplyArgs) -> Result<(), Box<dyn std::error::Error>> {
                 println!("  • {}", module);
             }
             println!("---------------------------------");
+            
+            // Filter modules based on the path argument if it's not "."
+            let filtered_modules = if root_dir != "." {
+                println!("🔍 Filtering modules with path: {}", root_dir);
+                modules.into_iter()
+                    .filter(|path| {
+                        // Check if the path contains the root_dir
+                        let contains_path = path.contains(&format!("/{}/", root_dir)) || 
+                                           path.ends_with(&format!("/{}", root_dir));
+                        contains_path
+                    })
+                    .collect::<Vec<String>>()
+            } else {
+                modules
+            };
+            
+            if filtered_modules.is_empty() {
+                println!("🎉 No modules match the specified path!");
+                return Ok(());
+            }
+            
+            println!("📦 Applying {} modules matching path: {}", filtered_modules.len(), root_dir);
+            println!("---------------------------------");
+            for module in &filtered_modules {
+                println!("  • {}", module);
+            }
+            println!("---------------------------------");
 
             if !args.dry_run {
                 println!("\n⚠️  You are about to apply changes to the above modules.");
@@ -44,7 +72,7 @@ pub fn execute(args: ApplyArgs) -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
 
-            helpers::run_terraform_apply(&modules, args.dry_run, ignore_workspaces)?;
+            helpers::run_terraform_apply(&filtered_modules, args.dry_run, ignore_workspaces)?;
             
             if args.dry_run {
                 println!("\n🔍 Dry run completed - no changes were applied");

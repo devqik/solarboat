@@ -18,7 +18,7 @@ pub fn execute(args: PlanArgs) -> Result<(), Box<dyn std::error::Error>> {
     let root_dir = &args.path;
     let ignore_workspaces = args.ignore_workspaces.as_deref();
 
-    match helpers::get_changed_modules(root_dir, args.force) {
+    match helpers::get_changed_modules(&args.path, args.force) {
         Ok(modules) => {
             if args.force {
                 println!("🔍 Found {} stateful modules", modules.len());
@@ -36,7 +36,35 @@ pub fn execute(args: PlanArgs) -> Result<(), Box<dyn std::error::Error>> {
                 println!("  • {}", module);
             }
             println!("---------------------------------");
-            helpers::run_terraform_plan(&modules, Some(output_dir), ignore_workspaces)?;
+            
+            // Filter modules based on the path argument if it's not "."
+            let filtered_modules = if root_dir != "." {
+                println!("🔍 Filtering modules with path: {}", root_dir);
+                modules.into_iter()
+                    .filter(|path| {
+                        // Check if the path contains the root_dir
+                        let contains_path = path.contains(&format!("/{}/", root_dir)) || 
+                                           path.ends_with(&format!("/{}", root_dir));
+                        contains_path
+                    })
+                    .collect::<Vec<String>>()
+            } else {
+                modules
+            };
+            
+            if filtered_modules.is_empty() {
+                println!("🎉 No modules match the specified path!");
+                return Ok(());
+            }
+            
+            println!("📦 Planning {} modules matching path: {}", filtered_modules.len(), root_dir);
+            println!("---------------------------------");
+            for module in &filtered_modules {
+                println!("  • {}", module);
+            }
+            println!("---------------------------------");
+            
+            helpers::run_terraform_plan(&filtered_modules, Some(output_dir), ignore_workspaces)?;
         }
         Err(e) => {
             eprintln!("Error getting changed modules: {}", e);

@@ -260,8 +260,8 @@ pub fn get_git_changed_files(root_dir: &str) -> Result<Vec<String>, String> {
             .map_err(|e| e.to_string())?;
             
         if !local_merge_base.status.success() {
-            // If we can't find a merge base, just use HEAD
-            return get_all_tf_files(root_dir);
+            // If we can't find a merge base, return an empty list
+            return Ok(Vec::new());
         }
         String::from_utf8_lossy(&local_merge_base.stdout).trim().to_string()
     };
@@ -341,11 +341,6 @@ pub fn get_git_changed_files(root_dir: &str) -> Result<Vec<String>, String> {
         );
     }
 
-    // If no changes were found, return all .tf files
-    if changed_files.is_empty() {
-        return get_all_tf_files(root_dir);
-    }
-
     // Remove duplicates
     changed_files.sort();
     changed_files.dedup();
@@ -398,14 +393,22 @@ pub fn process_changed_modules(changed_files: &[String], modules: &mut HashMap<S
     let mut affected_modules = Vec::new();
     let mut processed = HashMap::new();
 
-    let module_dirs: Vec<String> = changed_files.iter()
-        .filter_map(|file| Path::new(file).parent().and_then(|p| p.to_str()).map(String::from))
-        .collect();
+    // Collect all module paths first
+    let module_paths: Vec<String> = modules.keys().cloned().collect();
 
-    for module_dir in module_dirs {
-        if let Some(module) = modules.get(&module_dir) {
-            let path = module.path.clone();
-            mark_module_changed(&path, modules, &mut affected_modules, &mut processed);
+    // For each changed file, find the module it belongs to
+    for file in changed_files {
+        let file_path = Path::new(file);
+        
+        // Find the module this file belongs to
+        for module_path in &module_paths {
+            let module_path = Path::new(module_path);
+            
+            // Check if the file is in this module or a subdirectory of it
+            if file_path.starts_with(module_path) {
+                mark_module_changed(module_path.to_str().unwrap(), modules, &mut affected_modules, &mut processed);
+                break;
+            }
         }
     }
 
@@ -423,17 +426,11 @@ pub fn mark_module_changed(module_path: &str, all_modules: &mut HashMap<String, 
             // Add this stateful module to affected modules
             affected_modules.push(module_path.to_string());
             
-            // Also mark all modules that depend on this one
-            let user_paths: Vec<String> = module.used_by.clone();
-            for user_path in user_paths {
-                mark_module_changed(&user_path, all_modules, affected_modules, processed);
-            }
+            // We no longer mark dependents as changed
+            // This ensures only directly changed modules are included
         } else {
-            // For non-stateful modules, only mark their dependents
-            let user_paths: Vec<String> = module.used_by.clone();
-            for user_path in user_paths {
-                mark_module_changed(&user_path, all_modules, affected_modules, processed);
-            }
+            // For non-stateful modules, we don't mark anything as changed
+            // since they don't have state to track
         }
     }
 }
