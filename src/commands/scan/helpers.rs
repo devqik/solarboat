@@ -14,6 +14,7 @@ pub struct Module {
 pub fn get_changed_modules(root_dir: &str, force: bool) -> Result<Vec<String>, String> {
     let mut modules = HashMap::new();
 
+    // Always discover modules from the root directory
     discover_modules(root_dir, &mut modules)?;
     build_dependency_graph(&mut modules)?;
 
@@ -27,9 +28,41 @@ pub fn get_changed_modules(root_dir: &str, force: bool) -> Result<Vec<String>, S
         return Ok(stateful_modules);
     }
 
-    let changed_files = get_git_changed_files(root_dir)?;
+    // Always get git changes from the root directory
+    let changed_files = get_git_changed_files(".")?;
+    println!("🔍 Found {} changed files in root directory", changed_files.len());
+    
+    // Process the changed files to get affected modules
     let affected_modules = process_changed_modules(&changed_files, &mut modules)?;
+    println!("🔍 Found {} affected modules", affected_modules.len());
 
+    // If root_dir is not ".", filter modules based on the root_dir path
+    if root_dir != "." {
+        println!("🔍 Filtering modules with path: {}", root_dir);
+        
+        // Filter the affected modules to only include those matching the path
+        let filtered_modules: Vec<String> = affected_modules
+            .into_iter()
+            .filter(|path| {
+                // Check if the path contains the root_dir
+                let contains_path = path.contains(&format!("/{}/", root_dir)) || 
+                                   path.ends_with(&format!("/{}", root_dir));
+                
+                if contains_path {
+                    println!("✅ Keeping module: {}", path);
+                } else {
+                    println!("❌ Filtering out module: {}", path);
+                }
+                
+                contains_path
+            })
+            .collect();
+            
+        println!("🔍 Found {} modules matching path: {}", filtered_modules.len(), root_dir);
+        return Ok(filtered_modules);
+    }
+    
+    // Otherwise return all affected modules without filtering
     Ok(affected_modules)
 }
 
@@ -259,12 +292,24 @@ pub fn get_git_changed_files(root_dir: &str) -> Result<Vec<String>, String> {
                 .filter(|line| line.ends_with(".tf"))
                 .map(|line| {
                     let file = line[3..].trim();
-                    fs::canonicalize(Path::new(root_dir).join(file))
-                        .map_err(|e| e.to_string())
-                        .unwrap()
-                        .to_str()
-                        .unwrap()
-                        .to_string()
+                    // Use a more robust approach to handle paths that might not exist
+                    let file_path = Path::new(root_dir).join(file);
+                    if file_path.exists() {
+                        // If the file exists, canonicalize it
+                        fs::canonicalize(file_path)
+                            .map_err(|e| e.to_string())
+                            .unwrap()
+                            .to_str()
+                            .unwrap()
+                            .to_string()
+                    } else {
+                        // If the file doesn't exist, use the absolute path from the current directory
+                        let current_dir = std::env::current_dir().map_err(|e| e.to_string()).unwrap();
+                        current_dir.join(root_dir).join(file)
+                            .to_str()
+                            .unwrap()
+                            .to_string()
+                    }
                 })
         );
     }
@@ -282,12 +327,24 @@ pub fn get_git_changed_files(root_dir: &str) -> Result<Vec<String>, String> {
                 .lines()
                 .filter(|line| line.ends_with(".tf"))
                 .map(|line| {
-                    fs::canonicalize(Path::new(root_dir).join(line))
-                        .map_err(|e| e.to_string())
-                        .unwrap()
-                        .to_str()
-                        .unwrap()
-                        .to_string()
+                    // Use a more robust approach to handle paths that might not exist
+                    let file_path = Path::new(root_dir).join(line);
+                    if file_path.exists() {
+                        // If the file exists, canonicalize it
+                        fs::canonicalize(file_path)
+                            .map_err(|e| e.to_string())
+                            .unwrap()
+                            .to_str()
+                            .unwrap()
+                            .to_string()
+                    } else {
+                        // If the file doesn't exist, use the absolute path from the current directory
+                        let current_dir = std::env::current_dir().map_err(|e| e.to_string()).unwrap();
+                        current_dir.join(root_dir).join(line)
+                            .to_str()
+                            .unwrap()
+                            .to_string()
+                    }
                 })
         );
     }
@@ -309,6 +366,11 @@ fn get_all_tf_files(root_dir: &str) -> Result<Vec<String>, String> {
     let mut tf_files = Vec::new();
     
     fn find_tf_files(dir: &Path, files: &mut Vec<String>) -> Result<(), String> {
+        // Check if the directory exists
+        if !dir.exists() {
+            return Ok(());
+        }
+        
         for entry in fs::read_dir(dir).map_err(|e| e.to_string())? {
             let entry = entry.map_err(|e| e.to_string())?;
             let path = entry.path();
@@ -326,7 +388,17 @@ fn get_all_tf_files(root_dir: &str) -> Result<Vec<String>, String> {
         Ok(())
     }
     
-    find_tf_files(Path::new(root_dir), &mut tf_files)?;
+    // Check if the root_dir exists
+    let root_path = Path::new(root_dir);
+    if root_path.exists() {
+        find_tf_files(root_path, &mut tf_files)?;
+    } else {
+        // If the root_dir doesn't exist, use the current directory
+        let current_dir = std::env::current_dir().map_err(|e| e.to_string())?;
+        let full_path = current_dir.join(root_dir);
+        find_tf_files(&full_path, &mut tf_files)?;
+    }
+    
     Ok(tf_files)
 }
 
