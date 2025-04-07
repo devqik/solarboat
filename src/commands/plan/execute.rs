@@ -22,19 +22,20 @@ pub fn execute(args: PlanArgs) -> Result<(), Box<dyn std::error::Error>> {
         Ok(modules) => {
             if args.force {
                 println!("🔍 Found {} stateful modules", modules.len());
-                println!("📦 All stateful modules will be planned...");
+                println!("📦 Planning all stateful modules...");
             } else {
-                println!("🔍 Found {} changed files", modules.len());
+                println!("🔍 Found {} changed modules", modules.len());
                 if modules.is_empty() {
                     println!("🎉 No modules were changed!");
                     return Ok(());
                 }
-                println!("📦 Changed modules...");
+                println!("📦 Planning changed modules:");
             }
             println!("---------------------------------");
             for module in &modules {
-                println!("{}", module);
+                println!("  • {}", module);
             }
+            println!("---------------------------------");
             helpers::run_terraform_plan(&modules, Some(output_dir), ignore_workspaces)?;
         }
         Err(e) => {

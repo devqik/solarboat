@@ -16,19 +16,20 @@ pub fn execute(args: ApplyArgs) -> Result<(), Box<dyn std::error::Error>> {
         Ok(modules) => {
             if args.force {
                 println!("🔍 Found {} stateful modules", modules.len());
-                println!("📦 All stateful modules will be applied...");
+                println!("📦 Applying all stateful modules...");
             } else {
-                println!("🔍 Found {} changed files", modules.len());
+                println!("🔍 Found {} changed modules", modules.len());
                 if modules.is_empty() {
                     println!("🎉 No modules were changed!");
                     return Ok(());
                 }
-                println!("📦 Changed modules...");
+                println!("📦 Applying changed modules:");
             }
             println!("---------------------------------");
             for module in &modules {
-                println!("{}", module);
+                println!("  • {}", module);
             }
+            println!("---------------------------------");
 
             if !args.dry_run {
                 println!("\n⚠️  You are about to apply changes to the above modules.");

@@ -30,11 +30,9 @@ pub fn get_changed_modules(root_dir: &str, force: bool) -> Result<Vec<String>, S
 
     // Always get git changes from the root directory
     let changed_files = get_git_changed_files(".")?;
-    println!("🔍 Found {} changed files in root directory", changed_files.len());
     
     // Process the changed files to get affected modules
     let affected_modules = process_changed_modules(&changed_files, &mut modules)?;
-    println!("🔍 Found {} affected modules", affected_modules.len());
 
     // If root_dir is not ".", filter modules based on the root_dir path
     if root_dir != "." {
@@ -48,17 +46,11 @@ pub fn get_changed_modules(root_dir: &str, force: bool) -> Result<Vec<String>, S
                 let contains_path = path.contains(&format!("/{}/", root_dir)) || 
                                    path.ends_with(&format!("/{}", root_dir));
                 
-                if contains_path {
-                    println!("✅ Keeping module: {}", path);
-                } else {
-                    println!("❌ Filtering out module: {}", path);
-                }
-                
+                // Don't print anything for keeping or filtering modules
                 contains_path
             })
             .collect();
             
-        println!("🔍 Found {} modules matching path: {}", filtered_modules.len(), root_dir);
         return Ok(filtered_modules);
     }
     
@@ -109,8 +101,8 @@ pub fn build_dependency_graph(modules: &mut HashMap<String, Module>) -> Result<(
     }
 
     println!("🔗 Building dependency graph...");
-    println!("---------------------------------");
-    println!("{:?}", modules);
+    // Don't print the full module details, just the count
+    println!("🔍 Found {} modules repo-wide", modules.len());
     Ok(())
 }
 

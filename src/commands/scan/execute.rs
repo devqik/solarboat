@@ -9,17 +9,19 @@ pub fn execute(args: ScanArgs) -> Result<(), Box<dyn std::error::Error>> {
                 println!("🔍 Found {} stateful modules", modules.len());
                 println!("📦 All stateful modules will be scanned...");
             } else {
-                println!("🔍 Found {} changed files", modules.len());
                 if modules.is_empty() {
                     println!("🎉 No modules were changed!");
                     return Ok(());
                 }
-                println!("📦 Changed modules...");
+                println!("📦 Found {} changed modules:", modules.len());
             }
             println!("---------------------------------");
             for module in modules {
-                println!("{}", module);
+                // Extract just the module name from the full path for cleaner output
+                let module_name = module.split('/').last().unwrap_or(&module);
+                println!("  • {}", module_name);
             }
+            println!("---------------------------------");
         }
         Err(e) => {
             eprintln!("Error getting changed modules: {}", e);
