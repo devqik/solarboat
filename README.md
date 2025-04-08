@@ -31,6 +31,7 @@ handles the operational journey so developers can focus on what they do best - w
   - Automatic dependency propagation
   - Parallel execution of independent modules
   - Detailed operation reporting
+  - Path-based filtering for targeted operations
 
 ### Coming Soon
 - Self-service ephemeral environments on Kubernetes
@@ -77,8 +78,8 @@ solarboat plan --output-dir ./terraform-plans
 # Plan changes while ignoring specific workspaces
 solarboat plan --ignore-workspaces dev,staging
 
-# Force plan for all stateful modules regardless of changes
-solarboat plan --force
+# Process all stateful modules regardless of changes
+solarboat plan --all
 
 # Apply Terraform changes (dry-run mode by default)
 solarboat apply
@@ -89,8 +90,8 @@ solarboat apply --dry-run=false
 # Apply changes while ignoring specific workspaces
 solarboat apply --ignore-workspaces prod,staging
 
-# Force apply for all stateful modules regardless of changes
-solarboat apply --force
+# Process all stateful modules regardless of changes
+solarboat apply --all
 ```
 
 ### Command Details
@@ -100,7 +101,9 @@ The scan command analyzes your repository for changed Terraform modules and thei
 - Detects modified `.tf` files
 - Builds a dependency graph
 - Identifies affected modules
+- Filters modules based on the specified path
 - Does not generate any plans or make changes
+- Can process all stateful modules with `--all` flag
 
 #### Plan
 The plan command generates Terraform plans for changed modules. It:
@@ -110,7 +113,9 @@ The plan command generates Terraform plans for changed modules. It:
 - Optionally skips specified workspaces
 - Optionally saves plans to a specified directory
 - Shows what changes would be made
-- Can force plan all stateful modules with `--force` flag
+- Filters modules based on the specified path
+- Can process all stateful modules with `--all` flag
+- Saves plans as Markdown files for better readability
 
 #### Apply
 The apply command implements the changes to your infrastructure. It:
@@ -120,7 +125,8 @@ The apply command implements the changes to your infrastructure. It:
 - Optionally skips specified workspaces
 - Automatically approves changes in CI/CD
 - Shows real-time progress
-- Can force apply all stateful modules with `--force` flag
+- Filters modules based on the specified path
+- Can process all stateful modules with `--all` flag
 
 ### Module Types
 
@@ -139,6 +145,15 @@ Solar Boat CLI provides intelligent workspace management for Terraform modules:
 - **Individual Processing**: Processes each workspace separately for both plan and apply operations
 - **Workspace Filtering**: Allows skipping specific workspaces using the `--ignore-workspaces` flag
 - **Default Workspace**: Handles modules with only the default workspace appropriately
+
+### Path-based Filtering
+
+Solar Boat CLI supports path-based filtering for all commands:
+
+- **Targeted Operations**: Use `--path` to target specific modules or directories
+- **Recursive Scanning**: Automatically discovers all modules within the specified path
+- **Dependency Awareness**: Maintains dependency relationships even when filtering by path
+- **Combined with --all**: Can be used together with `--all` to process all modules in a specific path
 
 ### GitHub Actions Integration
 
@@ -201,6 +216,8 @@ This workflow will:
 | `plan_output_dir` | Directory to save Terraform plan files | No | `terraform-plans` |
 | `apply_dry_run` | Run apply in dry-run mode | No | `true` |
 | `ignore_workspaces` | Comma-separated list of workspaces to ignore | No | `''` |
+| `path` | Root directory to scan for Terraform modules | No | `'.'` |
+| `all` | Process all stateful modules regardless of changes | No | `false` |
 
 #### Workflow Examples
 
@@ -227,6 +244,17 @@ This workflow will:
     ignore_workspaces: dev,staging,test
     apply_dry_run: true
 ```
+
+**Targeted Operations with Path Filtering:**
+```yaml
+- name: Plan Specific Modules
+  uses: devqik/solarboat@v0.3.2
+  with:
+    command: plan
+    path: ./terraform-modules/production
+    plan_output_dir: prod-plans
+```
+
 **Complete Workflow with Conditions:**
 ```yaml
 jobs:
@@ -249,37 +277,16 @@ jobs:
         uses: devqik/solarboat@v0.3.2
         with:
           command: apply
-          ignore_workspaces: dev,staging
-
-      # Access plan artifacts
-      - name: Download Plans
-        uses: actions/download-artifact@v4
-        with:
-          name: terraform-plans
-          path: terraform-plans
+          apply_dry_run: false
 ```
 
-The action automatically uploads Terraform plans as artifacts when using the `plan` command, making them available for review or use in subsequent workflow steps.
+## Contributing 🤝
 
-#### PR Comment Example
-
-When a plan is generated, the action will automatically comment on the pull request with:
-- Summary of changes detected
-- Links to plan artifacts
-- Next steps for review
-- Retention period information
-
-#### Security Note
-
-The action requires `GITHUB_TOKEN` for commenting on PRs and managing artifacts. This token is automatically provided by GitHub Actions, but you need to pass it explicitly to the action.
-
-## Contributing ��
-
-Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License 📄
 
-This project is licensed under the BSD-3-Clause License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Support 💬
 

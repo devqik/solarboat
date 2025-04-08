@@ -18,33 +18,34 @@ pub fn execute(args: PlanArgs) -> Result<(), Box<dyn std::error::Error>> {
     let root_dir = &args.path;
     let ignore_workspaces = args.ignore_workspaces.as_deref();
 
-    match helpers::get_changed_modules(&args.path, args.force) {
+    match helpers::get_changed_modules(&args.path, args.all) {
         Ok(modules) => {
-            if args.force {
+            if args.all {
                 println!("🔍 Found {} stateful modules", modules.len());
-                println!("📦 Planning all stateful modules...");
+                println!("📦 All stateful modules will be planned...");
             } else {
-                println!("🔍 Found {} changed modules", modules.len());
                 if modules.is_empty() {
                     println!("🎉 No modules were changed!");
                     return Ok(());
                 }
-                println!("📦 Planning changed modules:");
+                println!("📦 Found {} changed modules:", modules.len());
             }
             println!("---------------------------------");
             for module in &modules {
-                println!("  • {}", module);
+                // Extract just the module name from the full path for cleaner output
+                let module_name = module.split('/').last().unwrap_or(module);
+                println!("  • {}", module_name);
             }
             println!("---------------------------------");
             
             // Filter modules based on the path argument if it's not "."
-            let filtered_modules = if root_dir != "." {
-                println!("🔍 Filtering modules with path: {}", root_dir);
+            let filtered_modules = if args.path != "." {
+                println!("🔍 Filtering modules with path: {}", args.path);
                 modules.into_iter()
                     .filter(|path| {
                         // Check if the path contains the root_dir
-                        let contains_path = path.contains(&format!("/{}/", root_dir)) || 
-                                           path.ends_with(&format!("/{}", root_dir));
+                        let contains_path = path.contains(&format!("/{}/", args.path)) || 
+                                           path.ends_with(&format!("/{}", args.path));
                         contains_path
                     })
                     .collect::<Vec<String>>()
@@ -57,14 +58,16 @@ pub fn execute(args: PlanArgs) -> Result<(), Box<dyn std::error::Error>> {
                 return Ok(());
             }
             
-            println!("📦 Planning {} modules matching path: {}", filtered_modules.len(), root_dir);
+            println!("📦 Planning {} modules matching path: {}", filtered_modules.len(), args.path);
             println!("---------------------------------");
             for module in &filtered_modules {
-                println!("  • {}", module);
+                // Extract just the module name from the full path for cleaner output
+                let module_name = module.split('/').last().unwrap_or(module);
+                println!("  • {}", module_name);
             }
             println!("---------------------------------");
-            
-            helpers::run_terraform_plan(&filtered_modules, Some(output_dir), ignore_workspaces)?;
+
+            helpers::run_terraform_plan(&filtered_modules, Some(output_dir), args.ignore_workspaces.as_deref())?;
         }
         Err(e) => {
             eprintln!("Error getting changed modules: {}", e);

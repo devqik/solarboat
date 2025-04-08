@@ -10,15 +10,15 @@ pub struct Module {
     is_stateful: bool,
 }
 
-pub fn get_changed_modules(root_dir: &str, force: bool) -> Result<Vec<String>, String> {
+pub fn get_changed_modules(root_dir: &str, all: bool) -> Result<Vec<String>, String> {
     let mut modules = HashMap::new();
 
     // Always discover modules from the root directory
     discover_modules(root_dir, &mut modules)?;
     build_dependency_graph(&mut modules)?;
 
-    if force {
-        // If force is true, return all stateful modules
+    if all {
+        // If all is true, return all stateful modules
         let stateful_modules: Vec<String> = modules
             .iter()
             .filter(|(_, module)| module.is_stateful)

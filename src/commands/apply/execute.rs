@@ -13,22 +13,23 @@ pub fn execute(args: ApplyArgs) -> Result<(), Box<dyn std::error::Error>> {
     let root_dir = &args.path;
     let ignore_workspaces = args.ignore_workspaces.as_deref();
 
-    match helpers::get_changed_modules(root_dir, args.force) {
+    match helpers::get_changed_modules(root_dir, args.all) {
         Ok(modules) => {
-            if args.force {
+            if args.all {
                 println!("🔍 Found {} stateful modules", modules.len());
-                println!("📦 Applying all stateful modules...");
+                println!("📦 All stateful modules will be applied...");
             } else {
-                println!("🔍 Found {} changed modules", modules.len());
                 if modules.is_empty() {
                     println!("🎉 No modules were changed!");
                     return Ok(());
                 }
-                println!("📦 Applying changed modules:");
+                println!("📦 Found {} changed modules:", modules.len());
             }
             println!("---------------------------------");
             for module in &modules {
-                println!("  • {}", module);
+                // Extract just the module name from the full path for cleaner output
+                let module_name = module.split('/').last().unwrap_or(module);
+                println!("  • {}", module_name);
             }
             println!("---------------------------------");
             
@@ -55,7 +56,9 @@ pub fn execute(args: ApplyArgs) -> Result<(), Box<dyn std::error::Error>> {
             println!("📦 Applying {} modules matching path: {}", filtered_modules.len(), root_dir);
             println!("---------------------------------");
             for module in &filtered_modules {
-                println!("  • {}", module);
+                // Extract just the module name from the full path for cleaner output
+                let module_name = module.split('/').last().unwrap_or(module);
+                println!("  • {}", module_name);
             }
             println!("---------------------------------");
 

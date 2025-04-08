@@ -3,9 +3,9 @@ use super::helpers;
 use std::io;
 
 pub fn execute(args: ScanArgs) -> Result<(), Box<dyn std::error::Error>> {
-    match helpers::get_changed_modules(&args.path, args.force) {
+    match helpers::get_changed_modules(&args.path, args.all) {
         Ok(modules) => {
-            if args.force {
+            if args.all {
                 println!("🔍 Found {} stateful modules", modules.len());
                 println!("📦 All stateful modules will be scanned...");
             } else {
