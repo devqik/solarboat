@@ -15,9 +15,6 @@ pub fn execute(args: PlanArgs) -> Result<(), Box<dyn std::error::Error>> {
         fs::create_dir_all(output_dir)?;
     }
 
-    let root_dir = &args.path;
-    let ignore_workspaces = args.ignore_workspaces.as_deref();
-
     match helpers::get_changed_modules(&args.path, args.all) {
         Ok(modules) => {
             if args.all {
