@@ -10,20 +10,54 @@ pub fn execute(args: ApplyArgs) -> Result<(), Box<dyn std::error::Error>> {
         println!("⚠️  Running in APPLY mode - changes will be applied!");
     }
 
-    let ignore_workspaces = args.ignore_workspaces.as_deref();
-
-    match helpers::get_changed_modules(".") {
+    match helpers::get_changed_modules(&args.path, args.all) {
         Ok(modules) => {
-            println!("🔍 Found {} changed files", modules.len());
-            if modules.is_empty() {
-                println!("🎉 No modules were changed!");
-                return Ok(());
+            if args.all {
+                println!("🔍 Found {} stateful modules", modules.len());
+                println!("📦 All stateful modules will be applied...");
+            } else {
+                if modules.is_empty() {
+                    println!("🎉 No modules were changed!");
+                    return Ok(());
+                }
+                println!("📦 Found {} changed modules:", modules.len());
             }
-            println!("📦 Changed modules...");
             println!("---------------------------------");
             for module in &modules {
-                println!("{}", module);
+                // Extract just the module name from the full path for cleaner output
+                let module_name = module.split('/').last().unwrap_or(module);
+                println!("  • {}", module_name);
             }
+            println!("---------------------------------");
+            
+            // Filter modules based on the path argument if it's not "."
+            let filtered_modules = if args.path != "." {
+                println!("🔍 Filtering modules with path: {}", args.path);
+                modules.into_iter()
+                    .filter(|path| {
+                        // Check if the path contains the root_dir
+                        let contains_path = path.contains(&format!("/{}/", args.path)) || 
+                                           path.ends_with(&format!("/{}", args.path));
+                        contains_path
+                    })
+                    .collect::<Vec<String>>()
+            } else {
+                modules
+            };
+            
+            if filtered_modules.is_empty() {
+                println!("🎉 No modules match the specified path!");
+                return Ok(());
+            }
+            
+            println!("📦 Applying {} modules matching path: {}", filtered_modules.len(), args.path);
+            println!("---------------------------------");
+            for module in &filtered_modules {
+                // Extract just the module name from the full path for cleaner output
+                let module_name = module.split('/').last().unwrap_or(module);
+                println!("  • {}", module_name);
+            }
+            println!("---------------------------------");
 
             if !args.dry_run {
                 println!("\n⚠️  You are about to apply changes to the above modules.");
@@ -38,7 +72,7 @@ pub fn execute(args: ApplyArgs) -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
 
-            helpers::run_terraform_apply(&modules, args.dry_run, ignore_workspaces)?;
+            helpers::run_terraform_apply(&filtered_modules, args.dry_run, args.ignore_workspaces.as_deref())?;
             
             if args.dry_run {
                 println!("\n🔍 Dry run completed - no changes were applied");
