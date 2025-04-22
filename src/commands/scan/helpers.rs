@@ -380,8 +380,10 @@ pub fn mark_module_changed(module_path: &str, all_modules: &mut HashMap<String, 
 
     if let Some(module) = all_modules.get(module_path) {
         if module.is_stateful {
-            // Add this stateful module to affected modules
-            affected_modules.push(module_path.to_string());
+            // Add this stateful module to affected modules if not already added
+            if !affected_modules.contains(&module_path.to_string()) {
+                affected_modules.push(module_path.to_string());
+            }
             
             // We no longer mark dependents as changed
             // This ensures only directly changed modules are included
@@ -396,11 +398,10 @@ pub fn mark_module_changed(module_path: &str, all_modules: &mut HashMap<String, 
                     if let Some(user_module) = all_modules.get(user_module_path) {
                         if user_module.is_stateful {
                             // Mark this stateful module as affected since it uses a changed stateless module
-                            println!("🔄 Adding stateful module that uses changed stateless module: {}", 
-                                     user_module_path.split('/').last().unwrap_or(user_module_path));
-                            
-                            // Only add if not already processed
+                            // Only add and print if not already in the list
                             if !affected_modules.contains(user_module_path) {
+                                println!("🔄 Adding stateful module that uses changed stateless module: {}", 
+                                         user_module_path.split('/').last().unwrap_or(user_module_path));
                                 affected_modules.push(user_module_path.clone());
                             }
                         }
