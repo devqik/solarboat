@@ -386,8 +386,27 @@ pub fn mark_module_changed(module_path: &str, all_modules: &mut HashMap<String, 
             // We no longer mark dependents as changed
             // This ensures only directly changed modules are included
         } else {
-            // For non-stateful modules, we don't mark anything as changed
-            // since they don't have state to track
+            // For stateless modules, we need to check if they are used by any stateful modules
+            // If so, we mark those stateful modules as changed as well
+            if !module.used_by.is_empty() {
+                println!("🔄 Stateless module with changes: {}", module_path.split('/').last().unwrap_or(module_path));
+                
+                // Check all modules that use this stateless module
+                for user_module_path in &module.used_by {
+                    if let Some(user_module) = all_modules.get(user_module_path) {
+                        if user_module.is_stateful {
+                            // Mark this stateful module as affected since it uses a changed stateless module
+                            println!("🔄 Adding stateful module that uses changed stateless module: {}", 
+                                     user_module_path.split('/').last().unwrap_or(user_module_path));
+                            
+                            // Only add if not already processed
+                            if !affected_modules.contains(user_module_path) {
+                                affected_modules.push(user_module_path.clone());
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
