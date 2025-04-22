@@ -21,7 +21,7 @@ assignees: ''
 
 ## Environment
 - OS: [e.g. macOS, Windows, Linux]
-- Version: [e.g. 0.4.0]
+- Version: [e.g. 0.5.0]
 - Command: [e.g. `solarboat plan --path ./terraform-modules`]
 
 ## Why This Matters
