@@ -47,7 +47,7 @@ handles the operational journey so developers can focus on what they do best - w
 cargo install solarboat
 
 # Install a specific version
-cargo install solarboat --version 0.5.2
+cargo install solarboat --version 0.5.3
 ```
 
 ### Building from Source
@@ -224,12 +224,12 @@ This workflow will:
 **Basic Scan and Plan:**
 ```yaml
 - name: Scan Changes
-  uses: devqik/solarboat@v0.5.2
+  uses: devqik/solarboat@v0.5.3
   with:
     command: scan
 
 - name: Plan Changes
-  uses: devqik/solarboat@v0.5.2
+  uses: devqik/solarboat@v0.5.3
   with:
     command: plan
     plan_output_dir: my-plans
@@ -238,7 +238,7 @@ This workflow will:
 **Apply with Workspace Filtering:**
 ```yaml
 - name: Apply Changes
-  uses: devqik/solarboat@v0.5.2
+  uses: devqik/solarboat@v0.5.3
   with:
     command: apply
     ignore_workspaces: dev,staging,test
@@ -248,7 +248,7 @@ This workflow will:
 **Targeted Operations with Path Filtering:**
 ```yaml
 - name: Plan Specific Modules
-  uses: devqik/solarboat@v0.5.2
+  uses: devqik/solarboat@v0.5.3
   with:
     command: plan
     path: ./terraform-modules/production
@@ -265,7 +265,7 @@ jobs:
       
       # Run on all branches
       - name: Plan Changes
-        uses: devqik/solarboat@v0.5.2
+        uses: devqik/solarboat@v0.5.3
         with:
           command: plan
           plan_output_dir: terraform-plans
@@ -274,7 +274,7 @@ jobs:
       # Run only on main branch
       - name: Apply Changes
         if: github.ref == 'refs/heads/main'
-        uses: devqik/solarboat@v0.5.2
+        uses: devqik/solarboat@v0.5.3
         with:
           command: apply
           apply_dry_run: false
