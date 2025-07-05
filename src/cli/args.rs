@@ -98,6 +98,15 @@ pub struct PlanArgs {
                     in the specified directory, regardless of whether they have been changed."
     )]
     pub all: bool,
+
+    #[clap(
+        long,
+        help = "Comma-separated list of var files to use",
+        long_help = "Specify var files to use during plan operation. \
+                    Multiple var files can be provided as comma-separated values. \
+                    Example: --var-files var1.tfvars,var2.tfvars"
+    )]
+    pub var_files: Option<Vec<String>>,
 }
 
 #[derive(Parser)]
@@ -137,4 +146,13 @@ pub struct ApplyArgs {
                     in the specified directory, regardless of whether they have been changed."
     )]
     pub all: bool,
+
+    #[clap(
+        long,
+        help = "Comma-separated list of var files to use",
+        long_help = "Specify var files to use during apply operation. \
+                    Multiple var files can be provided as comma-separated values. \
+                    Example: --var-files var1.tfvars,var2.tfvars"
+    )]
+    pub var_files: Option<Vec<String>>,
 }

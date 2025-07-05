@@ -18,7 +18,8 @@ pub fn get_changed_modules(root_dir: &str, force: bool) -> Result<Vec<String>, S
 pub fn run_terraform_plan(
     modules: &[String], 
     plan_dir: Option<&str>,
-    ignore_workspaces: Option<&[String]>
+    ignore_workspaces: Option<&[String]>,
+    var_files: Option<&[String]>,
 ) -> Result<(), String> {
 
     let mut failed_modules = Vec::new();
@@ -47,7 +48,7 @@ pub fn run_terraform_plan(
         
         if workspaces.len() <= 1 {
             println!("  🚀 Running terraform plan for default workspace...");
-            if !run_single_plan(module, plan_dir)? {
+            if !run_single_plan(module, plan_dir, var_files)? {
                 failed_modules.push(ModuleError {
                     path: module.clone(),
                     command: "plan".to_string(),
@@ -68,7 +69,7 @@ pub fn run_terraform_plan(
                 select_workspace(module, &workspace)?;
                 
                 println!("  🚀 Running terraform plan for workspace {}...", workspace);
-                if !run_single_plan(module, plan_dir)? {
+                if !run_single_plan(module, plan_dir, var_files)? {
                     failed_modules.push(ModuleError {
                         path: format!("{}:{}", module, workspace),
                         command: "plan".to_string(),
@@ -90,9 +91,14 @@ pub fn run_terraform_plan(
     Ok(())
 }
 
-fn run_single_plan(module: &str, plan_dir: Option<&str>) -> Result<bool, String> {
+fn run_single_plan(module: &str, plan_dir: Option<&str>, var_files: Option<&[String]>) -> Result<bool, String> {
     let mut terraform_cmd = Command::new("terraform");
     terraform_cmd.arg("plan").current_dir(module);
+    if let Some(var_files) = var_files {
+        for var_file in var_files {
+            terraform_cmd.arg("-var-file").arg(var_file);
+        }
+    }
 
     // Run terraform plan without specifying an output file
     let output = terraform_cmd
