@@ -64,7 +64,7 @@ pub fn execute(args: PlanArgs) -> Result<(), Box<dyn std::error::Error>> {
             }
             println!("---------------------------------");
 
-            helpers::run_terraform_plan(&filtered_modules, Some(output_dir), args.ignore_workspaces.as_deref())?;
+            helpers::run_terraform_plan(&filtered_modules, Some(output_dir), args.ignore_workspaces.as_deref(), args.var_files.as_deref())?;
         }
         Err(e) => {
             eprintln!("Error getting changed modules: {}", e);

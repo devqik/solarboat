@@ -17,12 +17,13 @@ pub fn get_changed_modules(root_dir: &str, force: bool) -> Result<Vec<String>, S
 pub fn run_terraform_apply(
     modules: &[String], 
     dry_run: bool,
-    ignore_workspaces: Option<&[String]>
+    ignore_workspaces: Option<&[String]>,
+    var_files: Option<&[String]>,
 ) -> Result<(), String> {
     
     if dry_run {
         println!("🔍 Running in dry-run mode - executing plan instead of apply");
-        return plan_helpers::run_terraform_plan(modules, None, ignore_workspaces);
+        return plan_helpers::run_terraform_plan(modules, None, ignore_workspaces, var_files);
     }
 
     let mut failed_modules = Vec::new();
@@ -51,7 +52,7 @@ pub fn run_terraform_apply(
         
         if workspaces.len() <= 1 {
             println!("  🧱 Running terraform apply for default workspace...");
-            if !run_single_apply(module)? {
+            if !run_single_apply(module, var_files)? {
                 failed_modules.push(ModuleError {
                     path: module.clone(),
                     command: "apply".to_string(),
@@ -73,7 +74,7 @@ pub fn run_terraform_apply(
                 plan_helpers::select_workspace(module, &workspace)?;
                 
                 println!("  🧱 Running terraform apply for workspace {}...", workspace);
-                if !run_single_apply(module)? {
+                if !run_single_apply(module, var_files)? {
                     failed_modules.push(ModuleError {
                         path: format!("{}:{}", module, workspace),
                         command: "apply".to_string(),
@@ -95,9 +96,15 @@ pub fn run_terraform_apply(
     Ok(())
 }
 
-fn run_single_apply(module: &str) -> Result<bool, String> {
-    let cmd_status = Command::new("terraform")
-        .args(&["apply", "-auto-approve"])
+fn run_single_apply(module: &str, var_files: Option<&[String]>) -> Result<bool, String> {
+    let mut terraform_cmd = Command::new("terraform");
+    terraform_cmd.arg("apply").arg("-auto-approve").current_dir(module);
+    if let Some(var_files) = var_files {
+        for var_file in var_files {
+            terraform_cmd.arg("-var-file").arg(var_file);
+        }
+    }
+    let cmd_status = terraform_cmd
         .current_dir(module)
         .status()
         .map_err(|e| e.to_string())?;

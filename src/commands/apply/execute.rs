@@ -72,7 +72,7 @@ pub fn execute(args: ApplyArgs) -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
 
-            helpers::run_terraform_apply(&filtered_modules, args.dry_run, args.ignore_workspaces.as_deref())?;
+            helpers::run_terraform_apply(&filtered_modules, args.dry_run, args.ignore_workspaces.as_deref(), args.var_files.as_deref())?;
             
             if args.dry_run {
                 println!("\n🔍 Dry run completed - no changes were applied");
