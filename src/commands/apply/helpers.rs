@@ -1,3 +1,4 @@
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use crate::commands::scan::helpers;
 use crate::commands::plan::helpers as plan_helpers;
@@ -61,10 +62,23 @@ pub fn run_terraform_apply(
             }
         } else {
             println!("  🌐 Found multiple workspaces: {:?}", workspaces);
+            
+            // Automatically ignore default workspace when there are multiple workspaces
+            let mut effective_ignore_workspaces = vec!["default".to_string()];
+            if let Some(ignored) = ignore_workspaces {
+                for workspace in ignored {
+                    if !effective_ignore_workspaces.contains(workspace) {
+                        effective_ignore_workspaces.push(workspace.clone());
+                    }
+                }
+            }
+            println!("  ⏭️  Automatically ignoring default workspace since multiple workspaces exist");
+            
             for workspace in workspaces {
-                // Skip ignored workspaces
-                if let Some(ignored) = ignore_workspaces {
-                    if ignored.contains(&workspace) {
+                if effective_ignore_workspaces.contains(&workspace) {
+                    if workspace == "default" {
+                        continue;
+                    } else {
                         println!("  ⏭️  Skipping ignored workspace: {}", workspace);
                         continue;
                     }
@@ -101,7 +115,58 @@ fn run_single_apply(module: &str, var_files: Option<&[String]>) -> Result<bool, 
     terraform_cmd.arg("apply").arg("-auto-approve").current_dir(module);
     if let Some(var_files) = var_files {
         for var_file in var_files {
-            terraform_cmd.arg("-var-file").arg(var_file);
+            // Resolve var file path relative to module directory
+            let var_file_path = if Path::new(var_file).is_absolute() {
+                PathBuf::from(var_file)
+            } else {
+                // Get current working directory
+                let current_dir = std::env::current_dir()
+                    .map_err(|e| format!("Failed to get current directory: {}", e))?;
+                
+                // Create absolute path to var file from current directory
+                let absolute_var_file = current_dir.join(var_file);
+                
+                // Create absolute path to module
+                let absolute_module = current_dir.join(module);
+                
+                // Calculate relative path from module to var file
+                match absolute_var_file.strip_prefix(&absolute_module) {
+                    Ok(relative_path) => {
+                        // If var file is within module directory, use relative path
+                        relative_path.to_path_buf()
+                    }
+                    Err(_) => {
+                        // If var file is outside module directory, calculate relative path
+                        let mut relative_path = PathBuf::new();
+                        let module_components: Vec<_> = absolute_module.components().collect();
+                        let var_file_components: Vec<_> = absolute_var_file.components().collect();
+                        
+                        // Find common prefix
+                        let mut common_len = 0;
+                        for (i, (m, v)) in module_components.iter().zip(var_file_components.iter()).enumerate() {
+                            if m == v {
+                                common_len = i + 1;
+                            } else {
+                                break;
+                            }
+                        }
+                        
+                        // Add "../" for each component in module path after common prefix
+                        for _ in common_len..module_components.len() {
+                            relative_path.push("..");
+                        }
+                        
+                        // Add remaining components from var file path
+                        for component in &var_file_components[common_len..] {
+                            relative_path.push(component);
+                        }
+                        
+                        relative_path
+                    }
+                }
+            };
+            
+            terraform_cmd.arg("-var-file").arg(&var_file_path);
         }
     }
     let cmd_status = terraform_cmd
