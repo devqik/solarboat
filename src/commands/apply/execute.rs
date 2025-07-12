@@ -1,8 +1,9 @@
 use crate::cli::ApplyArgs;
+use crate::config::Settings;
 use super::helpers;
 use std::io;
 
-pub fn execute(args: ApplyArgs) -> Result<(), Box<dyn std::error::Error>> {
+pub fn execute(args: ApplyArgs, settings: &Settings) -> anyhow::Result<()> {
     println!("🚀 Starting Terraform apply...");
     if args.dry_run {
         println!("🔍 Running in dry-run mode (default) - no changes will be applied");
@@ -72,7 +73,8 @@ pub fn execute(args: ApplyArgs) -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
 
-            helpers::run_terraform_apply(&filtered_modules, args.dry_run, args.ignore_workspaces.as_deref(), args.var_files.as_deref())?;
+            helpers::run_terraform_apply(&filtered_modules, args.dry_run, args.ignore_workspaces.as_deref(), args.var_files.as_deref(), settings.resolver())
+                .map_err(|e| anyhow::anyhow!("Terraform apply failed: {}", e))?;
             
             if args.dry_run {
                 println!("\n🔍 Dry run completed - no changes were applied");
@@ -82,7 +84,7 @@ pub fn execute(args: ApplyArgs) -> Result<(), Box<dyn std::error::Error>> {
         }
         Err(e) => {
             eprintln!("Error getting changed modules: {}", e);
-            return Err(Box::new(io::Error::new(io::ErrorKind::Other, e)));
+            return Err(anyhow::anyhow!("Failed to get changed modules: {}", e));
         }
     }
     Ok(())

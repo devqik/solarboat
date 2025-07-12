@@ -125,44 +125,44 @@ modules:
 
 #### Step 2.1: Add Configuration File CLI Option
 
-- [ ] Update `src/cli/args.rs`:
-  - [ ] Add `--config` option to all commands for explicit config file path
-  - [ ] Add `--no-config` flag to disable config file loading
-  - [ ] Update help text and documentation
+- [x] Update `src/cli/args.rs`:
+  - [x] Add `--config` option to all commands for explicit config file path
+  - [x] Add `--no-config` flag to disable config file loading
+  - [x] Update help text and documentation
 
 #### Step 2.2: Configuration Resolution Logic
 
-- [ ] Create `src/config/resolver.rs` with:
-  - [ ] `ConfigResolver` struct to merge CLI args with config file
-  - [ ] Logic to resolve module-specific vs global settings
-  - [ ] Priority order: CLI args > module config > global config > defaults
-  - [ ] Path resolution for var files (relative to config file location)
-  - [ ] Logic to merge workspace-specific var files with general var files
-  - [ ] Function to get final var files list for a specific module and workspace
+- [x] Create `src/config/resolver.rs` with:
+  - [x] `ConfigResolver` struct to merge CLI args with config file
+  - [x] Logic to resolve module-specific vs global settings
+  - [x] Priority order: CLI args > module config > global config > defaults
+  - [x] Path resolution for var files (relative to config file location)
+  - [x] Logic to merge workspace-specific var files with general var files
+  - [x] Function to get final var files list for a specific module and workspace
 
 #### Step 2.3: Update Command Handlers
 
-- [ ] Update `src/commands/mod.rs` to load configuration
-- [ ] Modify each command execution to use resolved configuration
-- [ ] Pass resolved settings to plan and apply helpers
+- [x] Update `src/commands/mod.rs` to load configuration
+- [x] Modify each command execution to use resolved configuration
+- [x] Pass resolved settings to plan and apply helpers
 
 ### Phase 3: Helper Function Updates
 
 #### Step 3.1: Update Plan Helpers
 
-- [ ] Modify `src/commands/plan/helpers.rs`:
-  - [ ] Update `run_terraform_plan` to accept resolved configuration
-  - [ ] Add logic to apply module-specific workspace and var file settings
-  - [ ] Add logic to apply workspace-specific var files for each workspace
-  - [ ] Maintain backward compatibility with existing CLI args
+- [x] Modify `src/commands/plan/helpers.rs`:
+  - [x] Update `run_terraform_plan` to accept resolved configuration
+  - [x] Add logic to apply module-specific workspace and var file settings
+  - [x] Add logic to apply workspace-specific var files for each workspace
+  - [x] Maintain backward compatibility with existing CLI args
 
 #### Step 3.2: Update Apply Helpers
 
-- [ ] Modify `src/commands/apply/helpers.rs`:
-  - [ ] Update `run_terraform_apply` to accept resolved configuration
-  - [ ] Add logic to apply module-specific workspace and var file settings
-  - [ ] Add logic to apply workspace-specific var files for each workspace
-  - [ ] Maintain backward compatibility with existing CLI args
+- [x] Modify `src/commands/apply/helpers.rs`:
+  - [x] Update `run_terraform_apply` to accept resolved configuration
+  - [x] Add logic to apply module-specific workspace and var file settings
+  - [x] Add logic to apply workspace-specific var files for each workspace
+  - [x] Maintain backward compatibility with existing CLI args
 
 ### Phase 4: Advanced Features
 

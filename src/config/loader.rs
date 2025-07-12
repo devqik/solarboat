@@ -3,6 +3,7 @@ use anyhow::{Context, Result};
 use serde_json;
 use serde_yaml;
 use std::path::{Path, PathBuf};
+use std::env;
 
 /// Configuration file names to search for
 const CONFIG_FILE_NAMES: &[&str] = &[
@@ -79,9 +80,31 @@ impl ConfigLoader {
     
     /// Find the first available configuration file
     fn find_config_file(&self) -> Result<Option<PathBuf>> {
-        for filename in CONFIG_FILE_NAMES {
-            let config_path = self.search_dir.join(filename);
+        // Check for SOLARBOAT_ENV
+        let mut search_order = Vec::new();
+        if let Ok(env) = env::var("SOLARBOAT_ENV") {
+            if !env.trim().is_empty() {
+                search_order.push(format!("solarboat.{}.json", env));
+                search_order.push(format!("solarboat.{}.yml", env));
+                search_order.push(format!("solarboat.{}.yaml", env));
+            }
+        }
+        // Add default config file names
+        for &filename in CONFIG_FILE_NAMES {
+            search_order.push(filename.to_string());
+        }
+        for filename in search_order {
+            let config_path = self.search_dir.join(&filename);
             if config_path.exists() {
+                if let Ok(env) = env::var("SOLARBOAT_ENV") {
+                    if !env.trim().is_empty() && filename.contains(&env) {
+                        println!("📄 Detected SOLARBOAT_ENV='{}', loading environment-specific config: {}", env, config_path.display());
+                    } else {
+                        println!("📄 Loading configuration from: {}", config_path.display());
+                    }
+                } else {
+                    println!("📄 Loading configuration from: {}", config_path.display());
+                }
                 return Ok(Some(config_path));
             }
         }
