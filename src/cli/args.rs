@@ -10,6 +10,23 @@ use clap::{Parser, Subcommand};
                   automatic dependency detection and stateful/stateless module handling."
 )]
 pub struct Args {
+    #[clap(
+        long,
+        help = "Path to configuration file (solarboat.json)",
+        long_help = "Specify a custom path to the configuration file. \
+                    If not provided, the tool will search for configuration files \
+                    in the current directory and parent directories."
+    )]
+    pub config: Option<String>,
+
+    #[clap(
+        long,
+        help = "Disable configuration file loading",
+        long_help = "When enabled, this flag will disable loading of configuration files \
+                    and use only CLI arguments and defaults."
+    )]
+    pub no_config: bool,
+
     #[command(subcommand)]
     pub command: Commands,
 }

@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use crate::commands::scan::helpers;
 use crate::commands::plan::helpers as plan_helpers;
+use crate::config::ConfigResolver;
 
 #[derive(Debug)]
 pub struct ModuleError {
@@ -20,11 +21,12 @@ pub fn run_terraform_apply(
     dry_run: bool,
     ignore_workspaces: Option<&[String]>,
     var_files: Option<&[String]>,
+    config_resolver: &ConfigResolver,
 ) -> Result<(), String> {
     
     if dry_run {
         println!("🔍 Running in dry-run mode - executing plan instead of apply");
-        return plan_helpers::run_terraform_plan(modules, None, ignore_workspaces, var_files);
+        return plan_helpers::run_terraform_plan(modules, None, ignore_workspaces, var_files, config_resolver);
     }
 
     let mut failed_modules = Vec::new();
@@ -53,7 +55,12 @@ pub fn run_terraform_apply(
         
         if workspaces.len() <= 1 {
             println!("  🧱 Running terraform apply for default workspace...");
-            if !run_single_apply(module, var_files)? {
+            // Get var files for default workspace
+            let default_var_files = config_resolver.get_workspace_var_files(module, "default", var_files);
+            if !default_var_files.is_empty() {
+                println!("  📄 Using {} var files for default workspace", default_var_files.len());
+            }
+            if !run_single_apply(module, Some(&default_var_files))? {
                 failed_modules.push(ModuleError {
                     path: module.clone(),
                     command: "apply".to_string(),
@@ -63,23 +70,14 @@ pub fn run_terraform_apply(
         } else {
             println!("  🌐 Found multiple workspaces: {:?}", workspaces);
             
-            // Automatically ignore default workspace when there are multiple workspaces
-            let mut effective_ignore_workspaces = vec!["default".to_string()];
-            if let Some(ignored) = ignore_workspaces {
-                for workspace in ignored {
-                    if !effective_ignore_workspaces.contains(workspace) {
-                        effective_ignore_workspaces.push(workspace.clone());
-                    }
-                }
-            }
-            println!("  ⏭️  Automatically ignoring default workspace since multiple workspaces exist");
-            
             for workspace in workspaces {
-                if effective_ignore_workspaces.contains(&workspace) {
+                // Check if workspace should be ignored using config resolver
+                if config_resolver.should_ignore_workspace(module, &workspace, ignore_workspaces) {
                     if workspace == "default" {
+                        println!("  ⏭️  Skipping default workspace (auto-ignored when multiple workspaces exist)");
                         continue;
                     } else {
-                        println!("  ⏭️  Skipping ignored workspace: {}", workspace);
+                        println!("  ⏭️  Skipping ignored workspace: {} (from configuration)", workspace);
                         continue;
                     }
                 }
@@ -88,7 +86,13 @@ pub fn run_terraform_apply(
                 plan_helpers::select_workspace(module, &workspace)?;
                 
                 println!("  🧱 Running terraform apply for workspace {}...", workspace);
-                if !run_single_apply(module, var_files)? {
+                
+                // Get workspace-specific var files
+                let workspace_var_files = config_resolver.get_workspace_var_files(module, &workspace, var_files);
+                if !workspace_var_files.is_empty() {
+                    println!("  📄 Using {} var files for workspace {}", workspace_var_files.len(), workspace);
+                }
+                if !run_single_apply(module, Some(&workspace_var_files))? {
                     failed_modules.push(ModuleError {
                         path: format!("{}:{}", module, workspace),
                         command: "apply".to_string(),

@@ -1,10 +1,10 @@
 use crate::cli::PlanArgs;
+use crate::config::Settings;
 use super::helpers;
-use std::io;
 use std::fs;
 use std::path::Path;
 
-pub fn execute(args: PlanArgs) -> Result<(), Box<dyn std::error::Error>> {
+pub fn execute(args: PlanArgs, settings: &Settings) -> anyhow::Result<()> {
     let output_dir = args.output_dir.as_deref().unwrap_or("terraform-plans");
     let output_path = Path::new(output_dir);
 
@@ -64,11 +64,12 @@ pub fn execute(args: PlanArgs) -> Result<(), Box<dyn std::error::Error>> {
             }
             println!("---------------------------------");
 
-            helpers::run_terraform_plan(&filtered_modules, Some(output_dir), args.ignore_workspaces.as_deref(), args.var_files.as_deref())?;
+            helpers::run_terraform_plan(&filtered_modules, Some(output_dir), args.ignore_workspaces.as_deref(), args.var_files.as_deref(), settings.resolver())
+                .map_err(|e| anyhow::anyhow!("Terraform plan failed: {}", e))?;
         }
         Err(e) => {
             eprintln!("Error getting changed modules: {}", e);
-            return Err(Box::new(io::Error::new(io::ErrorKind::Other, e)));
+            return Err(anyhow::anyhow!("Failed to get changed modules: {}", e));
         }
     }
     Ok(())

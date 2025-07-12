@@ -1,10 +1,10 @@
 use crate::cli::ScanArgs;
+use crate::config::Settings;
 use super::helpers;
-use std::io;
 use std::collections::HashSet;
 use std::process::Command;
 
-pub fn execute(args: ScanArgs) -> Result<(), Box<dyn std::error::Error>> {
+pub fn execute(args: ScanArgs, _settings: &Settings) -> anyhow::Result<()> {
     // Check if the specified path is a git repository
     let git_check = Command::new("git")
         .args(&["rev-parse", "--is-inside-work-tree"])
@@ -48,14 +48,14 @@ pub fn execute(args: ScanArgs) -> Result<(), Box<dyn std::error::Error>> {
                 }
                 Err(e) => {
                     eprintln!("Error getting changed modules: {}", e);
-                    return Err(Box::new(io::Error::new(io::ErrorKind::Other, e)));
+                    return Err(anyhow::anyhow!("Failed to get changed modules: {}", e));
                 }
             }
         }
         _ => {
             eprintln!("❌ Error: Path '{}' is not a git repository", args.path);
             eprintln!("Please specify a path that is within a git repository.");
-            return Err(Box::new(io::Error::new(io::ErrorKind::Other, "Not a git repository")));
+            return Err(anyhow::anyhow!("Path '{}' is not a git repository", args.path));
         }
     }
     Ok(())

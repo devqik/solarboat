@@ -7,5 +7,5 @@ use clap::Parser;
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let cli = cli::Args::parse();
-    commands::handle_command(cli)
+    Ok(commands::handle_command(cli)?)
 }
