@@ -1,6 +1,10 @@
 # Solar Boat CLI 🚀
 
 [![Release](https://github.com/devqik/solarboat/actions/workflows/release.yml/badge.svg)](https://github.com/devqik/solarboat/actions/workflows/release.yml)
+[![Crates.io](https://img.shields.io/crates/v/solarboat)](https://crates.io/crates/solarboat)
+[![Website](https://img.shields.io/website?url=https://solarboat.io)](https://solarboat.io)
+
+> Built with love for Rust and infrastructure automation by [devqik](https://devqik.com)
 
 Solar Boat is a command-line interface tool designed for Infrastructure as Code (IaC) and GitOps workflows. It provides intelligent Terraform operations management with automatic dependency detection and stateful/stateless module handling.
 
@@ -49,7 +53,7 @@ handles the operational journey so developers can focus on what they do best - w
 cargo install solarboat
 
 # Install a specific version
-cargo install solarboat --version 0.5.3
+cargo install solarboat --version 0.6.0
 ```
 
 ### Building from Source
@@ -169,7 +173,7 @@ Solar Boat CLI supports configuration files to manage global and module-specific
 
 #### Quick Start
 
-1. Create a `solarboat.json` or `solarboat.yml` in your project root:
+1. Create a `solarboat.json` in your project root:
 
 ```json
 {
@@ -208,7 +212,7 @@ SOLARBOAT_ENV=dev solarboat plan
 SOLARBOAT_ENV=prod solarboat apply
 ```
 
-Solar Boat will look for files like `solarboat.dev.json`, `solarboat.prod.yml`, etc. If the environment-specific file is not found, it falls back to the default config file.
+Solar Boat will look for files like `solarboat.dev.json`, etc. If the environment-specific file is not found, it falls back to the default config file.
 
 #### Configuration Options
 
@@ -332,12 +336,12 @@ This workflow will:
 
 ```yaml
 - name: Scan Changes
-  uses: devqik/solarboat@v0.5.3
+  uses: devqik/solarboat@v0.6.0
   with:
     command: scan
 
 - name: Plan Changes
-  uses: devqik/solarboat@v0.5.3
+  uses: devqik/solarboat@v0.6.0
   with:
     command: plan
     plan_output_dir: my-plans
@@ -347,7 +351,7 @@ This workflow will:
 
 ```yaml
 - name: Apply Changes
-  uses: devqik/solarboat@v0.5.3
+  uses: devqik/solarboat@v0.6.0
   with:
     command: apply
     ignore_workspaces: dev,staging,test
@@ -358,7 +362,7 @@ This workflow will:
 
 ```yaml
 - name: Plan Specific Modules
-  uses: devqik/solarboat@v0.5.3
+  uses: devqik/solarboat@v0.6.0
   with:
     command: plan
     path: ./terraform-modules/production
@@ -376,7 +380,7 @@ jobs:
 
       # Run on all branches
       - name: Plan Changes
-        uses: devqik/solarboat@v0.5.3
+        uses: devqik/solarboat@v0.6.0
         with:
           command: plan
           plan_output_dir: terraform-plans
@@ -385,7 +389,7 @@ jobs:
       # Run only on main branch
       - name: Apply Changes
         if: github.ref == 'refs/heads/main'
-        uses: devqik/solarboat@v0.5.3
+        uses: devqik/solarboat@v0.6.0
         with:
           command: apply
           apply_dry_run: false

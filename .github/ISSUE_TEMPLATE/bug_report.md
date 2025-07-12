@@ -1,35 +1,33 @@
 ---
-name: Bug Report
+name: Bug report
 about: Create a report to help us improve
-title: '[Bug] '
-labels: bug
-assignees: ''
-
+title: ""
+labels: "bug"
+assignees: ""
 ---
 
-# [Brief Title Describing the Bug]
+**Describe the bug**
+A clear and concise description of what the bug is.
 
-## Description
-- [Detailed description of the bug]
-- [What happened]
-- [What was expected to happen]
+**To Reproduce**
+Steps to reproduce the behavior:
 
-## Steps to Reproduce
-1. [First step]
-2. [Second step]
-3. [And so on...]
+1. Go to '...'
+2. Click on '....'
+3. Scroll down to '....'
+4. See error
 
-## Environment
-- OS: [e.g. macOS, Windows, Linux]
-- Version: [e.g. 0.5.3]
-- Command: [e.g. `solarboat plan --path ./terraform-modules`]
+**Expected behavior**
+A clear and concise description of what you expected to happen.
 
-## Why This Matters
-- [Explanation of why this bug is important]
-- [Impact on users or functionality]
-- [Workarounds if any]
+**Screenshots**
+If applicable, add screenshots to help explain your problem.
 
-## Additional Notes
-- [Any other relevant information]
-- [Screenshots or logs if applicable]
-- [Related issues or PRs]
+**Environment (please complete the following information):**
+
+- OS: [e.g. macOS, Ubuntu, Windows]
+- Version: [e.g. 0.6.0]
+- Terraform Version: [e.g. 1.7.4]
+
+**Additional context**
+Add any other context about the problem here.
