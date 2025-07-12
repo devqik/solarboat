@@ -173,7 +173,17 @@ impl ConfigLoader {
             let var_path = if Path::new(var_file).is_absolute() {
                 PathBuf::from(var_file)
             } else {
-                self.search_dir.join(var_file)
+                // All var files (both global and module-specific) are checked relative to the module directory
+                if context.starts_with("module") {
+                    // Extract module path from context (e.g., "module 'infrastructure/networking' workspace 'develop'")
+                    let module_path = context.split("'").nth(1).unwrap_or("");
+                    let module_dir = self.search_dir.join(module_path);
+                    module_dir.join(var_file)
+                } else {
+                    // For global config and other contexts, we'll check relative to config directory for validation
+                    // The actual resolution will be done relative to the module when the module is processed
+                    self.search_dir.join(var_file)
+                }
             };
             
             if !var_path.exists() {

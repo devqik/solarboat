@@ -84,8 +84,8 @@ impl ConfigResolver {
         );
         var_files.extend(workspace_var_files);
         
-        // Resolve relative paths relative to config file location
-        var_files = self.resolve_var_file_paths(&var_files);
+        // Resolve relative paths relative to module directory
+        var_files = self.resolve_var_file_paths(&var_files, module_path);
         
         var_files
     }
@@ -154,16 +154,17 @@ impl ConfigResolver {
         Vec::new()
     }
     
-    /// Resolve var file paths relative to config file location
-    fn resolve_var_file_paths(&self, var_files: &[String]) -> Vec<String> {
+    /// Resolve var file paths relative to module directory
+    fn resolve_var_file_paths(&self, var_files: &[String], module_path: &str) -> Vec<String> {
         var_files
             .iter()
             .map(|var_file| {
                 if Path::new(var_file).is_absolute() {
                     var_file.clone()
                 } else {
-                    // Make path relative to config file location
-                    self.config_dir.join(var_file).to_string_lossy().to_string()
+                    // All var files (both global and module-specific) are resolved relative to the current module directory
+                    let module_dir = self.config_dir.join(module_path);
+                    module_dir.join(var_file).to_string_lossy().to_string()
                 }
             })
             .collect()
@@ -277,9 +278,9 @@ mod tests {
             None,
         );
         
-        // Should include both general and workspace-specific files
-        assert!(var_files.contains(&"/tmp/networking.tfvars".to_string()));
-        assert!(var_files.contains(&"/tmp/module-prod.tfvars".to_string()));
+        // Should include both general and workspace-specific files, resolved relative to module directory
+        assert!(var_files.contains(&"/tmp/infrastructure/networking/networking.tfvars".to_string()));
+        assert!(var_files.contains(&"/tmp/infrastructure/networking/module-prod.tfvars".to_string()));
     }
     
     #[test]

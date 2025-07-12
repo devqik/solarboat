@@ -131,8 +131,8 @@ fn test_config_resolver_precedence() {
     assert_eq!(
         workspace_vars,
         vec![
-            temp_dir.path().join("networking.tfvars").to_string_lossy().to_string(),
-            temp_dir.path().join("networking-prod.tfvars").to_string_lossy().to_string()
+            temp_dir.path().join("infrastructure/networking/networking.tfvars").to_string_lossy().to_string(),
+            temp_dir.path().join("infrastructure/networking/networking-prod.tfvars").to_string_lossy().to_string()
         ]
     );
     
@@ -145,8 +145,8 @@ fn test_config_resolver_precedence() {
     assert_eq!(
         fallback_vars,
         vec![
-            temp_dir.path().join("global.tfvars").to_string_lossy().to_string(),
-            temp_dir.path().join("global-prod.tfvars").to_string_lossy().to_string()
+            temp_dir.path().join("other/module/global.tfvars").to_string_lossy().to_string(),
+            temp_dir.path().join("other/module/global-prod.tfvars").to_string_lossy().to_string()
         ]
     );
 }
@@ -352,8 +352,8 @@ fn test_workspace_var_files_merging() {
     assert_eq!(
         all_vars,
         vec![
-            temp_dir.path().join("networking.tfvars").to_string_lossy().to_string(),
-            temp_dir.path().join("networking-prod.tfvars").to_string_lossy().to_string()
+            temp_dir.path().join("infrastructure/networking/networking.tfvars").to_string_lossy().to_string(),
+            temp_dir.path().join("infrastructure/networking/networking-prod.tfvars").to_string_lossy().to_string()
         ]
     );
     
@@ -362,8 +362,8 @@ fn test_workspace_var_files_merging() {
     assert_eq!(
         fallback_vars,
         vec![
-            temp_dir.path().join("global.tfvars").to_string_lossy().to_string(),
-            temp_dir.path().join("global-prod.tfvars").to_string_lossy().to_string()
+            temp_dir.path().join("other/module/global.tfvars").to_string_lossy().to_string(),
+            temp_dir.path().join("other/module/global-prod.tfvars").to_string_lossy().to_string()
         ]
     );
 }
