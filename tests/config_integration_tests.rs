@@ -30,35 +30,6 @@ fn test_basic_config_loading() {
 }
 
 #[test]
-fn test_yaml_config_loading() {
-    let temp_dir = TempDir::new().unwrap();
-    let config_content = r#"
-global:
-  ignore_workspaces:
-    - dev
-    - test
-  var_files:
-    - global.tfvars
-  workspace_var_files:
-    prod:
-      - prod.tfvars
-"#;
-    
-    let config_path = temp_dir.path().join("solarboat.yml");
-    fs::write(&config_path, config_content).unwrap();
-    
-    let loader = ConfigLoader::new(temp_dir.path());
-    let config = loader.load().unwrap().unwrap();
-    
-    assert_eq!(config.global.ignore_workspaces, vec!["dev", "test"]);
-    assert_eq!(config.global.var_files, vec!["global.tfvars"]);
-    assert_eq!(
-        config.global.workspace_var_files.as_ref().unwrap().workspaces["prod"],
-        vec!["prod.tfvars"]
-    );
-}
-
-#[test]
 fn test_module_specific_config() {
     let temp_dir = TempDir::new().unwrap();
     let config_content = r#"{
@@ -270,27 +241,6 @@ fn test_invalid_json_config() {
     let loader = ConfigLoader::new(temp_dir.path());
     let result = loader.load();
     assert!(result.is_err());
-}
-
-#[test]
-fn test_invalid_yaml_config() {
-    let temp_dir = TempDir::new().unwrap();
-    let invalid_config = r#"
-global:
-  ignore_workspaces:
-    - dev
-  var_files:
-    - global.tfvars
-  invalid_field: value
-"#;
-    
-    let config_path = temp_dir.path().join("solarboat.yml");
-    fs::write(&config_path, invalid_config).unwrap();
-    
-    let loader = ConfigLoader::new(temp_dir.path());
-    let result = loader.load();
-    // YAML with unknown fields should still load (serde ignores unknown fields)
-    assert!(result.is_ok());
 }
 
 #[test]

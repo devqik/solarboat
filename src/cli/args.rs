@@ -12,7 +12,7 @@ use clap::{Parser, Subcommand};
 pub struct Args {
     #[clap(
         long,
-        help = "Path to configuration file (solarboat.json, solarboat.yml, or solarboat.yaml)",
+        help = "Path to configuration file (solarboat.json)",
         long_help = "Specify a custom path to the configuration file. \
                     If not provided, the tool will search for configuration files \
                     in the current directory and parent directories."

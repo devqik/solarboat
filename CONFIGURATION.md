@@ -7,7 +7,6 @@ Solarboat supports configuration files to customize workspace management and var
 1. Create a configuration file in your project root:
 
    - `solarboat.json` (JSON format)
-   - `solarboat.yml` or `solarboat.yaml` (YAML format)
 
 2. Configure your settings and run solarboat commands as usual.
 
@@ -37,42 +36,6 @@ Solarboat supports configuration files to customize workspace management and var
     }
   }
 }
-```
-
-### YAML Equivalent
-
-```yaml
-global:
-  ignore_workspaces:
-    - dev
-    - test
-  var_files:
-    - global.tfvars
-    - environment.tfvars
-  workspace_var_files:
-    dev:
-      - dev.tfvars
-      - dev-secrets.tfvars
-    staging:
-      - staging.tfvars
-      - staging-secrets.tfvars
-    prod:
-      - prod.tfvars
-      - prod-secrets.tfvars
-
-modules:
-  infrastructure/networking:
-    ignore_workspaces:
-      - dev
-    var_files:
-      - networking.tfvars
-      - vpc.tfvars
-    workspace_var_files:
-      staging:
-        - networking-staging.tfvars
-      prod:
-        - networking-prod.tfvars
-        - networking-prod-secrets.tfvars
 ```
 
 ## Configuration Sections
@@ -145,11 +108,7 @@ SOLARBOAT_ENV=staging solarboat scan
 When `SOLARBOAT_ENV` is set, solarboat looks for these files in order:
 
 1. `solarboat.<env>.json`
-2. `solarboat.<env>.yml`
-3. `solarboat.<env>.yaml`
-4. `solarboat.json` (fallback)
-5. `solarboat.yml` (fallback)
-6. `solarboat.yaml` (fallback)
+2. `solarboat.json` (fallback)
 
 ### Example Environment Files
 
@@ -310,7 +269,7 @@ Solarboat validates your configuration and provides helpful warnings for:
 
 ### Error Handling
 
-- Invalid JSON/YAML syntax results in immediate error
+- Invalid JSON syntax results in immediate error
 - Missing required fields use sensible defaults
 - Configuration validation warnings don't prevent execution
 
@@ -395,7 +354,7 @@ solarboat apply
 
 - Check file permissions
 - Verify file path is correct
-- Ensure JSON/YAML syntax is valid
+- Ensure JSON syntax is valid
 
 ### Unexpected Variable Files
 

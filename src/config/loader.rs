@@ -1,15 +1,12 @@
 use crate::config::types::SolarboatConfig;
 use anyhow::{Context, Result};
 use serde_json;
-use serde_yaml;
 use std::path::{Path, PathBuf};
 use std::env;
 
 /// Configuration file names to search for
 const CONFIG_FILE_NAMES: &[&str] = &[
     "solarboat.json",
-    "solarboat.yml", 
-    "solarboat.yaml",
 ];
 
 /// Loader for solarboat configuration files
@@ -61,18 +58,13 @@ impl ConfigLoader {
                 serde_json::from_str(&content)
                     .with_context(|| format!("Failed to parse JSON configuration: {}", path.display()))
             }
-            Some("yml") | Some("yaml") => {
-                serde_yaml::from_str(&content)
-                    .with_context(|| format!("Failed to parse YAML configuration: {}", path.display()))
-            }
             _ => {
                 // Try to detect format by content
                 if content.trim().starts_with('{') {
                     serde_json::from_str(&content)
                         .with_context(|| format!("Failed to parse JSON configuration: {}", path.display()))
                 } else {
-                    serde_yaml::from_str(&content)
-                        .with_context(|| format!("Failed to parse YAML configuration: {}", path.display()))
+                    Err(anyhow::anyhow!("Unsupported configuration file format. Only JSON files are supported."))
                 }
             }
         }
@@ -85,8 +77,6 @@ impl ConfigLoader {
         if let Ok(env) = env::var("SOLARBOAT_ENV") {
             if !env.trim().is_empty() {
                 search_order.push(format!("solarboat.{}.json", env));
-                search_order.push(format!("solarboat.{}.yml", env));
-                search_order.push(format!("solarboat.{}.yaml", env));
             }
         }
         // Add default config file names
@@ -256,7 +246,7 @@ mod tests {
     }
     
     #[test]
-    fn test_load_yaml_config() {
+    fn test_unsupported_file_format() {
         let temp_dir = TempDir::new().unwrap();
         let config_content = r#"
 global:
@@ -265,22 +255,14 @@ global:
     - test
   var_files:
     - global.tfvars
-modules:
-  infrastructure/networking:
-    ignore_workspaces:
-      - dev
-    var_files:
-      - networking.tfvars
 "#;
         
         fs::write(temp_dir.path().join("solarboat.yml"), config_content).unwrap();
         
         let loader = ConfigLoader::new(temp_dir.path());
-        let config = loader.load().unwrap().unwrap();
-        
-        assert_eq!(config.global.ignore_workspaces, vec!["dev", "test"]);
-        assert_eq!(config.global.var_files, vec!["global.tfvars"]);
-        assert!(config.modules.contains_key("infrastructure/networking"));
+        let result = loader.load_from_path(temp_dir.path().join("solarboat.yml"));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Unsupported configuration file format"));
     }
     
     #[test]
