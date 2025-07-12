@@ -1,5 +1,4 @@
-use crate::config::types::{GlobalConfig, ModuleConfig, SolarboatConfig, WorkspaceVarFiles};
-use std::collections::HashMap;
+use crate::config::types::{GlobalConfig, ModuleConfig, SolarboatConfig};
 use std::path::{Path, PathBuf};
 
 /// Resolved configuration for a specific module and workspace
@@ -202,6 +201,8 @@ impl ConfigResolver {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::WorkspaceVarFiles;
+    use std::collections::HashMap;
     use crate::config::types::SolarboatConfig;
     
     fn create_test_config() -> SolarboatConfig {

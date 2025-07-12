@@ -113,38 +113,62 @@ impl ConfigLoader {
     
     /// Validate the loaded configuration
     pub fn validate_config(&self, config: &SolarboatConfig) -> Result<()> {
+        let validation_errors: Vec<String> = Vec::new();
+        let mut validation_warnings: Vec<String> = Vec::new();
+        
         // Validate module paths exist
         for module_path in config.modules.keys() {
             let full_path = self.search_dir.join(module_path);
             if !full_path.exists() {
-                println!("⚠️  Warning: Module path '{}' does not exist", module_path);
+                validation_warnings.push(format!("Module path '{}' does not exist (checked: {})", 
+                    module_path, full_path.display()));
             }
         }
         
-        // Validate var file paths (basic check - just warn if they don't exist)
-        self.validate_var_files(&config.global.var_files, "global")?;
+        // Validate var file paths
+        self.validate_var_files(&config.global.var_files, "global", &mut validation_warnings)?;
         
         if let Some(workspace_files) = &config.global.workspace_var_files {
             for (workspace, files) in &workspace_files.workspaces {
-                self.validate_var_files(files, &format!("global workspace '{}'", workspace))?;
+                self.validate_var_files(files, &format!("global workspace '{}'", workspace), &mut validation_warnings)?;
             }
         }
         
         for (module_path, module_config) in &config.modules {
-            self.validate_var_files(&module_config.var_files, &format!("module '{}'", module_path))?;
+            self.validate_var_files(&module_config.var_files, &format!("module '{}'", module_path), &mut validation_warnings)?;
             
             if let Some(workspace_files) = &module_config.workspace_var_files {
                 for (workspace, files) in &workspace_files.workspaces {
-                    self.validate_var_files(files, &format!("module '{}' workspace '{}'", module_path, workspace))?;
+                    self.validate_var_files(files, &format!("module '{}' workspace '{}'", module_path, workspace), &mut validation_warnings)?;
                 }
             }
+        }
+        
+        // Validate workspace names (basic sanity check)
+        self.validate_workspace_names(config, &mut validation_warnings)?;
+        
+        // Print warnings
+        if !validation_warnings.is_empty() {
+            println!("⚠️  Configuration validation warnings:");
+            for warning in validation_warnings {
+                println!("   • {}", warning);
+            }
+        }
+        
+        // Print errors and return error if any
+        if !validation_errors.is_empty() {
+            eprintln!("❌ Configuration validation errors:");
+            for error in &validation_errors {
+                eprintln!("   • {}", error);
+            }
+            return Err(anyhow::anyhow!("Configuration validation failed with {} error(s)", validation_errors.len()));
         }
         
         Ok(())
     }
     
     /// Validate variable file paths
-    fn validate_var_files(&self, var_files: &[String], context: &str) -> Result<()> {
+    fn validate_var_files(&self, var_files: &[String], context: &str, warnings: &mut Vec<String>) -> Result<()> {
         for var_file in var_files {
             let var_path = if Path::new(var_file).is_absolute() {
                 PathBuf::from(var_file)
@@ -153,9 +177,38 @@ impl ConfigLoader {
             };
             
             if !var_path.exists() {
-                println!("⚠️  Warning: Var file '{}' for {} does not exist", var_file, context);
+                warnings.push(format!("Var file '{}' for {} does not exist (checked: {})", 
+                    var_file, context, var_path.display()));
             }
         }
+        Ok(())
+    }
+    
+    /// Validate workspace names for basic sanity
+    fn validate_workspace_names(&self, config: &SolarboatConfig, warnings: &mut Vec<String>) -> Result<()> {
+        let reserved_names = ["default", "terraform"];
+        
+        // Check global workspace var files
+        if let Some(workspace_files) = &config.global.workspace_var_files {
+            for workspace in workspace_files.workspaces.keys() {
+                if reserved_names.contains(&workspace.as_str()) {
+                    warnings.push(format!("Workspace name '{}' is reserved and may cause issues", workspace));
+                }
+            }
+        }
+        
+        // Check module workspace var files
+        for (module_path, module_config) in &config.modules {
+            if let Some(workspace_files) = &module_config.workspace_var_files {
+                for workspace in workspace_files.workspaces.keys() {
+                    if reserved_names.contains(&workspace.as_str()) {
+                        warnings.push(format!("Workspace name '{}' in module '{}' is reserved and may cause issues", 
+                            workspace, module_path));
+                    }
+                }
+            }
+        }
+        
         Ok(())
     }
 }

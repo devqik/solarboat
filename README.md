@@ -10,9 +10,9 @@ Solar Boat is a command-line interface tool designed for Infrastructure as Code 
 
 ## Why "Solar Boat"?
 
-Inspired by the Ancient Egyptian Solar Boats that carried Pharaohs through their celestial journey, this CLI tool serves 
-as a modern vessel that carries developers through the complexities of operations and infrastructure management. Just as 
-the ancient boats handled the journey through the afterlife so the Pharaoh didn't have to worry about it, Solar Boat CLI 
+Inspired by the Ancient Egyptian Solar Boats that carried Pharaohs through their celestial journey, this CLI tool serves
+as a modern vessel that carries developers through the complexities of operations and infrastructure management. Just as
+the ancient boats handled the journey through the afterlife so the Pharaoh didn't have to worry about it, Solar Boat CLI
 handles the operational journey so developers can focus on what they do best - writing code.
 
 </td>
@@ -25,6 +25,7 @@ handles the operational journey so developers can focus on what they do best - w
 ## Features ✨
 
 ### Current Features
+
 - **Intelligent Terraform Operations**
   - Automatic detection of changed modules
   - Smart handling of stateful and stateless modules
@@ -34,6 +35,7 @@ handles the operational journey so developers can focus on what they do best - w
   - Path-based filtering for targeted operations
 
 ### Coming Soon
+
 - Self-service ephemeral environments on Kubernetes
 - Infrastructure management and deployment
 - Custom workflow automation
@@ -97,7 +99,9 @@ solarboat apply --all
 ### Command Details
 
 #### Scan
+
 The scan command analyzes your repository for changed Terraform modules and their dependencies. It:
+
 - Detects modified `.tf` files
 - Builds a dependency graph
 - Identifies affected modules
@@ -106,7 +110,9 @@ The scan command analyzes your repository for changed Terraform modules and thei
 - Can process all stateful modules with `--all` flag
 
 #### Plan
+
 The plan command generates Terraform plans for changed modules. It:
+
 - Runs `terraform init` for each module
 - Detects and handles multiple workspaces
 - Generates detailed plans for each workspace
@@ -118,7 +124,9 @@ The plan command generates Terraform plans for changed modules. It:
 - Saves plans as Markdown files for better readability
 
 #### Apply
+
 The apply command implements the changes to your infrastructure. It:
+
 - Runs `terraform init` for each module
 - Detects and handles multiple workspaces
 - Supports dry-run mode for safety
@@ -155,6 +163,104 @@ Solar Boat CLI supports path-based filtering for all commands:
 - **Dependency Awareness**: Maintains dependency relationships even when filtering by path
 - **Combined with --all**: Can be used together with `--all` to process all modules in a specific path
 
+### Configuration Files
+
+Solar Boat CLI supports configuration files to manage global and module-specific settings for Terraform workspaces and variable files.
+
+#### Quick Start
+
+1. Create a `solarboat.json` or `solarboat.yml` in your project root:
+
+```json
+{
+  "global": {
+    "ignore_workspaces": ["dev", "test"],
+    "var_files": ["global.tfvars"],
+    "workspace_var_files": {
+      "prod": ["prod.tfvars"]
+    }
+  },
+  "modules": {
+    "infrastructure/networking": {
+      "ignore_workspaces": ["test"],
+      "var_files": ["networking.tfvars"],
+      "workspace_var_files": {
+        "prod": ["networking-prod.tfvars"]
+      }
+    }
+  }
+}
+```
+
+2. Run Solar Boat as usual - it will automatically load your configuration:
+
+```bash
+solarboat plan
+solarboat apply
+```
+
+#### Environment-Specific Configuration
+
+Use different config files for different environments by setting the `SOLARBOAT_ENV` environment variable:
+
+```bash
+SOLARBOAT_ENV=dev solarboat plan
+SOLARBOAT_ENV=prod solarboat apply
+```
+
+Solar Boat will look for files like `solarboat.dev.json`, `solarboat.prod.yml`, etc. If the environment-specific file is not found, it falls back to the default config file.
+
+#### Configuration Options
+
+- **Use a specific config file**:
+
+  ```bash
+  solarboat --config /path/to/solarboat.json plan
+  ```
+
+- **Disable config file loading**:
+
+  ```bash
+  solarboat --no-config plan
+  ```
+
+- **Override config file settings with CLI options**:
+  ```bash
+  solarboat plan --ignore-workspaces dev,test --var-files custom.tfvars
+  ```
+
+#### Configuration Precedence
+
+1. CLI arguments (highest priority)
+2. Module-specific config
+3. Global config
+4. Defaults (lowest priority)
+
+#### Example: Workspace-Specific Variable Files
+
+```json
+{
+  "global": {
+    "workspace_var_files": {
+      "dev": ["dev-secrets.tfvars"],
+      "prod": ["prod-secrets.tfvars"]
+    }
+  }
+}
+```
+
+#### Validation
+
+Solar Boat validates your configuration and warns about:
+
+- Missing module paths
+- Missing variable files
+- Reserved workspace names (`default`, `terraform`)
+
+Run `solarboat scan` to check your configuration before running plan/apply.
+
+> **Note**: For complete configuration documentation, see [CONFIGURATION.md](./CONFIGURATION.md).
+
 ### GitHub Actions Integration
 
 Solar Boat provides a GitHub Action for seamless integration with your CI/CD pipeline. The action can scan for changes, generate Terraform plans, and automatically comment on pull requests with the results.
@@ -166,9 +272,9 @@ name: Infrastructure Management
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [main]
   push:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   infrastructure:
@@ -176,7 +282,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # Important for detecting changes
+          fetch-depth: 0 # Important for detecting changes
 
       - name: Scan for Changes
         if: github.event_name == 'pull_request'
@@ -192,17 +298,18 @@ jobs:
           command: plan
           output_dir: terraform-plans
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          
+
       - name: Apply Infrastructure Changes
         if: github.ref == 'refs/heads/main'
         uses: devqik/solarboat-action@latest
         with:
           command: apply
-          apply_dry_run: false  # Set to true for dry-run mode
+          apply_dry_run: false # Set to true for dry-run mode
           github_token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
 This workflow will:
+
 1. Scan for changes
 2. Plan infrastructure changes
 3. Comment on the PR with results
@@ -210,18 +317,19 @@ This workflow will:
 
 #### Action Inputs
 
-| Input | Description | Required | Default |
-|-------|-------------|----------|---------|
-| `command` | Command to run (`scan`, `plan`, or `apply`) | Yes | - |
-| `plan_output_dir` | Directory to save Terraform plan files | No | `terraform-plans` |
-| `apply_dry_run` | Run apply in dry-run mode | No | `true` |
-| `ignore_workspaces` | Comma-separated list of workspaces to ignore | No | `''` |
-| `path` | Root directory to scan for Terraform modules | No | `'.'` |
-| `all` | Process all stateful modules regardless of changes | No | `false` |
+| Input               | Description                                        | Required | Default           |
+| ------------------- | -------------------------------------------------- | -------- | ----------------- |
+| `command`           | Command to run (`scan`, `plan`, or `apply`)        | Yes      | -                 |
+| `plan_output_dir`   | Directory to save Terraform plan files             | No       | `terraform-plans` |
+| `apply_dry_run`     | Run apply in dry-run mode                          | No       | `true`            |
+| `ignore_workspaces` | Comma-separated list of workspaces to ignore       | No       | `''`              |
+| `path`              | Root directory to scan for Terraform modules       | No       | `'.'`             |
+| `all`               | Process all stateful modules regardless of changes | No       | `false`           |
 
 #### Workflow Examples
 
 **Basic Scan and Plan:**
+
 ```yaml
 - name: Scan Changes
   uses: devqik/solarboat@v0.5.3
@@ -236,6 +344,7 @@ This workflow will:
 ```
 
 **Apply with Workspace Filtering:**
+
 ```yaml
 - name: Apply Changes
   uses: devqik/solarboat@v0.5.3
@@ -246,6 +355,7 @@ This workflow will:
 ```
 
 **Targeted Operations with Path Filtering:**
+
 ```yaml
 - name: Plan Specific Modules
   uses: devqik/solarboat@v0.5.3
@@ -256,13 +366,14 @@ This workflow will:
 ```
 
 **Complete Workflow with Conditions:**
+
 ```yaml
 jobs:
   terraform:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       # Run on all branches
       - name: Plan Changes
         uses: devqik/solarboat@v0.5.3
@@ -270,7 +381,7 @@ jobs:
           command: plan
           plan_output_dir: terraform-plans
           ignore_workspaces: dev,staging
-      
+
       # Run only on main branch
       - name: Apply Changes
         if: github.ref == 'refs/heads/main'
@@ -297,6 +408,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Acknowledgments 🙏
 
 This project needs your support! If you find Solar Boat CLI useful, please consider:
+
 - ⭐ Starring the project on GitHub
 - 🛠️ Contributing with code, documentation, or bug reports
 - 💡 Suggesting new features or improvements
@@ -304,5 +416,4 @@ This project needs your support! If you find Solar Boat CLI useful, please consi
 
 Your support will help make this project better and encourage its continued development.
 
-~ @devqik (Creator)
-
+~ [@devqik](https://github.com/devqik) (Creator)
