@@ -53,7 +53,7 @@ handles the operational journey so developers can focus on what they do best - w
 cargo install solarboat
 
 # Install a specific version
-cargo install solarboat --version 0.6.1
+cargo install solarboat --version 0.7.0
 ```
 
 ### Building from Source
@@ -188,17 +188,12 @@ solarboat apply --watch
 - Useful for debugging and troubleshooting
 - See Terraform output as it happens
 
-#### Status Updates
+**Important Note:** When `--watch` is enabled, the `--parallel` argument is automatically forced to 1 to maintain readable real-time output. This ensures that multiple Terraform operations don't interfere with each other's output display.
 
-When using `--watch`, you'll see status updates like:
-
-```
-📦 Processing module: infrastructure/networking
-  🔧 Initializing module in background...
-  ✅ Initialization completed
-  🚀 Running terraform plan for default workspace...
-  Plan: 2 to add, 0 to change, 0 to destroy.
-  ✅ Plan completed successfully
+```bash
+# Even if you specify --parallel 4, watch mode will force it to 1
+solarboat plan --watch --parallel 4
+# This will actually run with --parallel 1 for clean real-time output
 ```
 
 #### Timeout Handling
@@ -404,14 +399,14 @@ jobs:
 
       - name: Scan for Changes
         if: github.event_name == 'pull_request'
-        uses: devqik/solarboat@v0.6.1
+        uses: devqik/solarboat@v0.7.0
         with:
           command: scan
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Plan Infrastructure Changes
         if: github.event_name == 'pull_request'
-        uses: devqik/solarboat@v0.6.1
+        uses: devqik/solarboat@v0.7.0
         with:
           command: plan
           output_dir: terraform-plans
@@ -419,7 +414,7 @@ jobs:
 
       - name: Apply Infrastructure Changes
         if: github.ref == 'refs/heads/main'
-        uses: devqik/solarboat@v0.6.1
+        uses: devqik/solarboat@v0.7.0
         with:
           command: apply
           apply_dry_run: false # Set to true for dry-run mode
@@ -452,12 +447,12 @@ This workflow will:
 
 ```yaml
 - name: Scan Changes
-  uses: devqik/solarboat@v0.6.1
+  uses: devqik/solarboat@v0.7.0
   with:
     command: scan
 
 - name: Plan Changes
-  uses: devqik/solarboat@v0.6.1
+  uses: devqik/solarboat@v0.7.0
   with:
     command: plan
     plan_output_dir: my-plans
@@ -467,7 +462,7 @@ This workflow will:
 
 ```yaml
 - name: Apply Changes
-  uses: devqik/solarboat@v0.6.1
+  uses: devqik/solarboat@v0.7.0
   with:
     command: apply
     ignore_workspaces: dev,staging,test
@@ -478,7 +473,7 @@ This workflow will:
 
 ```yaml
 - name: Plan Specific Modules
-  uses: devqik/solarboat@v0.6.1
+  uses: devqik/solarboat@v0.7.0
   with:
     command: plan
     path: ./terraform-modules/production
@@ -489,7 +484,7 @@ This workflow will:
 
 ```yaml
 - name: Plan with Real-time Output
-  uses: devqik/solarboat@v0.6.1
+  uses: devqik/solarboat@v0.7.0
   with:
     command: plan
     watch: true
@@ -507,7 +502,7 @@ jobs:
 
       # Run on all branches
       - name: Plan Changes
-        uses: devqik/solarboat@v0.6.1
+        uses: devqik/solarboat@v0.7.0
         with:
           command: plan
           plan_output_dir: terraform-plans
@@ -516,7 +511,7 @@ jobs:
       # Run only on main branch
       - name: Apply Changes
         if: github.ref == 'refs/heads/main'
-        uses: devqik/solarboat@v0.6.1
+        uses: devqik/solarboat@v0.7.0
         with:
           command: apply
           apply_dry_run: false
