@@ -1,6 +1,7 @@
 use std::process::{Command, Stdio};
 use std::path::Path;
 use regex::Regex;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Represents a single terraform operation to be processed
 #[derive(Debug, Clone)]
@@ -51,16 +52,26 @@ pub fn select_workspace(module_path: &str, workspace: &str) -> Result<(), String
 }
 
 /// Save plan output to a markdown file
-pub fn save_plan_output(module_path: &str, plan_dir: &str, output_lines: &[String]) -> Result<(), String> {
+/// Uses naming convention: {module_name}-{workspace}-{timestamp}.tfplan.md
+pub fn save_plan_output(module_path: &str, plan_dir: &str, workspace: Option<&str>, output_lines: &[String]) -> Result<(), String> {
     // Create the plan directory if it doesn't exist
     std::fs::create_dir_all(plan_dir)
         .map_err(|e| format!("Failed to create plan directory: {}", e))?;
         
     if let Some(module_name) = Path::new(module_path).file_name().and_then(|n| n.to_str()) {
-        let plan_file = Path::new(plan_dir).join(format!("{}.tfplan.md", module_name));
+        // Get current timestamp
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|e| format!("Failed to get timestamp: {}", e))?
+            .as_secs();
+        
+        // Create filename with workspace and timestamp
+        let workspace_name = workspace.unwrap_or("default");
+        let filename = format!("{}-{}-{}.tfplan.md", module_name, workspace_name, timestamp);
+        let plan_file = Path::new(plan_dir).join(filename);
         
         // Format the output
-        let mut content = format!("# Terraform Plan Output for {}\n\n", module_name);
+        let mut content = format!("# Terraform Plan Output for {} (workspace: {})\n\n", module_name, workspace_name);
         content.push_str("```\n");
         for line in output_lines {
             content.push_str(&clean_terraform_output(line));
@@ -83,7 +94,7 @@ pub fn clean_terraform_output(input: &str) -> String {
 }
 
 /// Run a single terraform plan operation
-pub fn run_single_plan(module_path: &str, plan_dir: Option<&str>, var_files: Option<&[String]>) -> Result<bool, String> {
+pub fn run_single_plan(module_path: &str, plan_dir: Option<&str>, workspace: Option<&str>, var_files: Option<&[String]>) -> Result<bool, String> {
     let mut cmd = Command::new("terraform");
     cmd.arg("plan").current_dir(module_path);
     
@@ -105,7 +116,7 @@ pub fn run_single_plan(module_path: &str, plan_dir: Option<&str>, var_files: Opt
     if let Some(plan_dir) = plan_dir {
         let plan_output = String::from_utf8_lossy(&output.stdout).to_string();
         let output_lines: Vec<String> = plan_output.lines().map(|s| s.to_string()).collect();
-        if let Err(e) = save_plan_output(module_path, plan_dir, &output_lines) {
+        if let Err(e) = save_plan_output(module_path, plan_dir, workspace, &output_lines) {
             eprintln!("Warning: Failed to save plan output: {}", e);
         }
     }
@@ -128,4 +139,4 @@ pub fn run_single_apply(module_path: &str, var_files: Option<&[String]>) -> Resu
         .map_err(|e| e.to_string())?;
 
     Ok(status.success())
-} 
+}

@@ -316,7 +316,7 @@ impl ParallelProcessor {
                                         println!("  ✅ Plan completed successfully");
                                         // Save plan output if plan_dir is specified
                                         if let Some(plan_dir) = plan_dir {
-                                            if let Err(e) = save_plan_output(module_path, plan_dir, &background_tf.get_output()) {
+                                            if let Err(e) = save_plan_output(module_path, plan_dir, workspace.as_deref(), &background_tf.get_output()) {
                                                 println!("  ⚠️  Failed to save plan output: {}", e);
                                             }
                                         }
@@ -338,7 +338,7 @@ impl ParallelProcessor {
                         }
                     }
                 } else {
-                    match run_single_plan(module_path, plan_dir.as_deref(), Some(var_files)) {
+                    match run_single_plan(module_path, plan_dir.as_deref(), workspace.as_deref(), Some(var_files)) {
                         Ok(success) => {
                             if success {
                                 println!("  ✅ Plan completed successfully");

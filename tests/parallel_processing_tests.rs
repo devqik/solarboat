@@ -1,17 +1,6 @@
 use solarboat::utils::parallel_processor::ParallelProcessor;
 use solarboat::utils::terraform_operations::{TerraformOperation, OperationType};
 
-// Mock operation for testing
-fn create_mock_operation(id: u32) -> TerraformOperation {
-    TerraformOperation {
-        module_path: format!("test-module-{}", id),
-        workspace: Some(format!("workspace-{}", id)),
-        var_files: vec![],
-        operation_type: OperationType::Plan { plan_dir: None },
-        watch: false,
-    }
-}
-
 #[test]
 fn test_parallel_processor_creation_and_clamping() {
     let processor = ParallelProcessor::new(10);
@@ -173,20 +162,32 @@ fn test_parallel_processor_many_operations() {
 
 #[test]
 fn test_cli_parallel_argument_parsing() {
-    use solarboat::cli::PlanArgs;
+    use solarboat::cli::Args;
     use clap::Parser;
     
     // Test that parallel argument is parsed correctly
-    let args = PlanArgs::try_parse_from(&["solarboat", "plan", "--parallel", "3"]).unwrap();
-    assert_eq!(args.parallel, 3);
+    let args = Args::try_parse_from(&["solarboat", "plan", "--parallel", "3"]).unwrap();
+    if let solarboat::cli::Commands::Plan(plan_args) = args.command {
+        assert_eq!(plan_args.parallel, 3);
+    } else {
+        panic!("Expected Plan command");
+    }
     
     // Test default value
-    let args = PlanArgs::try_parse_from(&["solarboat", "plan"]).unwrap();
-    assert_eq!(args.parallel, 1);
+    let args = Args::try_parse_from(&["solarboat", "plan"]).unwrap();
+    if let solarboat::cli::Commands::Plan(plan_args) = args.command {
+        assert_eq!(plan_args.parallel, 1);
+    } else {
+        panic!("Expected Plan command");
+    }
     
     // Test clamping (max 4)
-    let args = PlanArgs::try_parse_from(&["solarboat", "plan", "--parallel", "10"]).unwrap();
-    assert_eq!(args.parallel, 10); // CLI doesn't clamp, but the processor will
+    let args = Args::try_parse_from(&["solarboat", "plan", "--parallel", "10"]).unwrap();
+    if let solarboat::cli::Commands::Plan(plan_args) = args.command {
+        assert_eq!(plan_args.parallel, 10); // CLI doesn't clamp, but the processor will
+    } else {
+        panic!("Expected Plan command");
+    }
 }
 
 #[test]
