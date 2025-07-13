@@ -38,7 +38,7 @@ impl ModuleGroup {
 pub struct ParallelProcessor {
     module_groups: Arc<Mutex<HashMap<String, ModuleGroup>>>,
     results: Arc<Mutex<Vec<OperationResult>>>,
-    active_modules: Arc<Mutex<HashMap<String, bool>>>, // Track which modules are currently being processed
+    active_modules: Arc<Mutex<HashMap<String, bool>>>,
     parallel_limit: usize,
     worker_handle: Option<thread::JoinHandle<()>>,
 }
