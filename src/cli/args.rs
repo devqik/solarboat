@@ -75,6 +75,16 @@ pub struct ScanArgs {
                     in the specified directory, regardless of whether they have been changed."
     )]
     pub all: bool,
+
+    #[clap(
+        long,
+        default_value = "main",
+        help = "Default branch to compare against for changes",
+        long_help = "Specify the default branch name to compare against when detecting changes. \
+                    This is used to determine which modules have been modified since the last \
+                    merge with the default branch. Default is 'main'."
+    )]
+    pub default_branch: String,
 }
 
 #[derive(Parser)]
@@ -144,6 +154,16 @@ pub struct PlanArgs {
                     Default is 1 (sequential processing)."
     )]
     pub parallel: u32,
+
+    #[clap(
+        long,
+        default_value = "main",
+        help = "Default branch to compare against for changes",
+        long_help = "Specify the default branch name to compare against when detecting changes. \
+                    This is used to determine which modules have been modified since the last \
+                    merge with the default branch. Default is 'main'."
+    )]
+    pub default_branch: String,
 }
 
 #[derive(Parser)]
@@ -212,4 +232,14 @@ pub struct ApplyArgs {
                     Default is 1 (sequential processing)."
     )]
     pub parallel: u32,
+
+    #[clap(
+        long,
+        default_value = "main",
+        help = "Default branch to compare against for changes",
+        long_help = "Specify the default branch name to compare against when detecting changes. \
+                    This is used to determine which modules have been modified since the last \
+                    merge with the default branch. Default is 'main'."
+    )]
+    pub default_branch: String,
 }

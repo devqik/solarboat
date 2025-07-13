@@ -10,7 +10,7 @@ pub struct Module {
     is_stateful: bool,
 }
 
-pub fn get_changed_modules(root_dir: &str, all: bool) -> Result<Vec<String>, String> {
+pub fn get_changed_modules(root_dir: &str, all: bool, default_branch: &str) -> Result<Vec<String>, String> {
     let mut modules = HashMap::new();
 
     // Always discover modules from the root directory
@@ -28,7 +28,7 @@ pub fn get_changed_modules(root_dir: &str, all: bool) -> Result<Vec<String>, Str
     }
 
     // Always get git changes from the root directory
-    let changed_files = get_git_changed_files(".")?;
+    let changed_files = get_git_changed_files(".", default_branch)?;
     
     // Process the changed files to get affected modules
     let affected_modules = process_changed_modules(&changed_files, &mut modules)?;
@@ -239,10 +239,10 @@ pub fn has_backend_config(tf_files: &[fs::DirEntry]) -> bool {
     false
 }
 
-pub fn get_git_changed_files(root_dir: &str) -> Result<Vec<String>, String> {
-    // First, try to get the merge-base with origin/main
+pub fn get_git_changed_files(root_dir: &str, default_branch: &str) -> Result<Vec<String>, String> {
+    // First, try to get the merge-base with origin/{default_branch}
     let merge_base_output = Command::new("git")
-        .args(&["merge-base", "origin/main", "HEAD"])
+        .args(&["merge-base", &format!("origin/{}", default_branch), "HEAD"])
         .current_dir(root_dir)
         .output()
         .map_err(|e| e.to_string())?;
@@ -250,9 +250,9 @@ pub fn get_git_changed_files(root_dir: &str) -> Result<Vec<String>, String> {
     let merge_base = if merge_base_output.status.success() {
         String::from_utf8_lossy(&merge_base_output.stdout).trim().to_string()
     } else {
-        // If origin/main is not available, try with local main
+        // If origin/{default_branch} is not available, try with local {default_branch}
         let local_merge_base = Command::new("git")
-            .args(&["merge-base", "main", "HEAD"])
+            .args(&["merge-base", default_branch, "HEAD"])
             .current_dir(root_dir)
             .output()
             .map_err(|e| e.to_string())?;

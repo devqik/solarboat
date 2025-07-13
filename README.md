@@ -53,7 +53,7 @@ handles the operational journey so developers can focus on what they do best - w
 cargo install solarboat
 
 # Install a specific version
-cargo install solarboat --version 0.7.0
+cargo install solarboat --version 0.7.1
 ```
 
 ### Building from Source
@@ -75,6 +75,10 @@ solarboat scan
 # Scan modules in a specific directory
 solarboat scan --path ./terraform-modules
 
+# Scan with custom default branch
+solarboat scan --default-branch master
+solarboat scan --default-branch develop
+
 # Plan Terraform changes
 solarboat plan
 
@@ -90,6 +94,10 @@ solarboat plan --ignore-workspaces dev,staging
 # Process all stateful modules regardless of changes
 solarboat plan --all
 
+# Plan with custom default branch
+solarboat plan --default-branch master
+solarboat plan --default-branch develop
+
 # Apply Terraform changes (dry-run mode by default)
 solarboat apply
 
@@ -101,6 +109,10 @@ solarboat apply --ignore-workspaces prod,staging
 
 # Process all stateful modules regardless of changes
 solarboat apply --all
+
+# Apply with custom default branch
+solarboat apply --default-branch master
+solarboat apply --default-branch develop
 
 # Watch background Terraform operations with real-time output
 solarboat plan --watch
@@ -117,12 +129,30 @@ solarboat apply --dry-run=false --watch --ignore-workspaces dev,staging
 
 The scan command analyzes your repository for changed Terraform modules and their dependencies. It:
 
-- Detects modified `.tf` files
+- Detects modified `.tf` files by comparing against a default branch
 - Builds a dependency graph
 - Identifies affected modules
 - Filters modules based on the specified path
 - Does not generate any plans or make changes
 - Can process all stateful modules with `--all` flag
+- Supports custom default branch names with `--default-branch`
+
+**Default Branch Configuration:**
+
+By default, Solar Boat compares changes against the `main` branch. You can specify a different default branch:
+
+```bash
+# Use 'master' as the default branch
+solarboat scan --default-branch master
+
+# Use 'develop' as the default branch
+solarboat scan --default-branch develop
+
+# Use 'main' (default)
+solarboat scan --default-branch main
+```
+
+This is useful for repositories that use different default branch names (e.g., `master` instead of `main`).
 
 #### Plan
 
@@ -137,6 +167,7 @@ The plan command generates Terraform plans for changed modules. It:
 - Filters modules based on the specified path
 - Can process all stateful modules with `--all` flag
 - Saves plans as Markdown files for better readability
+- Supports custom default branch names with `--default-branch`
 
 #### Apply
 
@@ -150,6 +181,7 @@ The apply command implements the changes to your infrastructure. It:
 - Shows real-time progress
 - Filters modules based on the specified path
 - Can process all stateful modules with `--all` flag
+- Supports custom default branch names with `--default-branch`
 
 ### Background Operations with `--watch`
 
@@ -399,14 +431,14 @@ jobs:
 
       - name: Scan for Changes
         if: github.event_name == 'pull_request'
-        uses: devqik/solarboat@v0.7.0
+        uses: devqik/solarboat@v0.7.1
         with:
           command: scan
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Plan Infrastructure Changes
         if: github.event_name == 'pull_request'
-        uses: devqik/solarboat@v0.7.0
+        uses: devqik/solarboat@v0.7.1
         with:
           command: plan
           output_dir: terraform-plans
@@ -414,7 +446,7 @@ jobs:
 
       - name: Apply Infrastructure Changes
         if: github.ref == 'refs/heads/main'
-        uses: devqik/solarboat@v0.7.0
+        uses: devqik/solarboat@v0.7.1
         with:
           command: apply
           apply_dry_run: false # Set to true for dry-run mode
@@ -439,7 +471,8 @@ This workflow will:
 | `path`              | Root directory to scan for Terraform modules       | No       | `'.'`             |
 | `all`               | Process all stateful modules regardless of changes | No       | `false`           |
 | `watch`             | Enable real-time Terraform output display          | No       | `false`           |
-| `parallel`          | The number of processes to run in parallel         | No       | `false`           |
+| `parallel`          | The number of processes to run in parallel         | No       | `1`               |
+| `default-branch`    | Change the default git branch                      | No       | `main`            |
 
 #### Workflow Examples
 
@@ -447,12 +480,12 @@ This workflow will:
 
 ```yaml
 - name: Scan Changes
-  uses: devqik/solarboat@v0.7.0
+  uses: devqik/solarboat@v0.7.1
   with:
     command: scan
 
 - name: Plan Changes
-  uses: devqik/solarboat@v0.7.0
+  uses: devqik/solarboat@v0.7.1
   with:
     command: plan
     plan_output_dir: my-plans
@@ -462,7 +495,7 @@ This workflow will:
 
 ```yaml
 - name: Apply Changes
-  uses: devqik/solarboat@v0.7.0
+  uses: devqik/solarboat@v0.7.1
   with:
     command: apply
     ignore_workspaces: dev,staging,test
@@ -473,7 +506,7 @@ This workflow will:
 
 ```yaml
 - name: Plan Specific Modules
-  uses: devqik/solarboat@v0.7.0
+  uses: devqik/solarboat@v0.7.1
   with:
     command: plan
     path: ./terraform-modules/production
@@ -484,7 +517,7 @@ This workflow will:
 
 ```yaml
 - name: Plan with Real-time Output
-  uses: devqik/solarboat@v0.7.0
+  uses: devqik/solarboat@v0.7.1
   with:
     command: plan
     watch: true
@@ -502,7 +535,7 @@ jobs:
 
       # Run on all branches
       - name: Plan Changes
-        uses: devqik/solarboat@v0.7.0
+        uses: devqik/solarboat@v0.7.1
         with:
           command: plan
           plan_output_dir: terraform-plans
@@ -511,7 +544,7 @@ jobs:
       # Run only on main branch
       - name: Apply Changes
         if: github.ref == 'refs/heads/main'
-        uses: devqik/solarboat@v0.7.0
+        uses: devqik/solarboat@v0.7.1
         with:
           command: apply
           apply_dry_run: false

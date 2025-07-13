@@ -11,9 +11,9 @@ pub struct ModuleError {
     error: String,
 }
 
-pub fn get_changed_modules(root_dir: &str, force: bool) -> Result<Vec<String>, String> {
+pub fn get_changed_modules(root_dir: &str, force: bool, default_branch: &str) -> Result<Vec<String>, String> {
     // Use the scan helpers' get_changed_modules function directly
-    helpers::get_changed_modules(root_dir, force)
+    helpers::get_changed_modules(root_dir, force, default_branch)
 }
 
 pub fn run_terraform_apply(
