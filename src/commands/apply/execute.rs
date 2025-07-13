@@ -73,7 +73,7 @@ pub fn execute(args: ApplyArgs, settings: &Settings) -> anyhow::Result<()> {
                 }
             }
 
-            helpers::run_terraform_apply(&filtered_modules, args.dry_run, args.ignore_workspaces.as_deref(), args.var_files.as_deref(), settings.resolver(), args.watch)
+            helpers::run_terraform_apply(&filtered_modules, args.dry_run, args.ignore_workspaces.as_deref(), args.var_files.as_deref(), settings.resolver(), args.watch, args.parallel)
                 .map_err(|e| anyhow::anyhow!("Terraform apply failed: {}", e))?;
             
             if args.dry_run {

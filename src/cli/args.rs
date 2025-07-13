@@ -133,6 +133,17 @@ pub struct PlanArgs {
                     Without this flag, Terraform output is hidden until completion."
     )]
     pub watch: bool,
+
+    /// Number of modules to process in parallel (max 4). Default is 1. This value is clamped to prevent system overload.
+    #[clap(
+        long,
+        default_value = "1",
+        help = "Number of parallel module processes (max 4)",
+        long_help = "Specify the number of modules to process in parallel. \
+                    The value is clamped to a maximum of 4 to prevent system overload. \
+                    Default is 1 (sequential processing)."
+    )]
+    pub parallel: u32,
 }
 
 #[derive(Parser)]
@@ -190,4 +201,15 @@ pub struct ApplyArgs {
                     Without this flag, Terraform output is hidden until completion."
     )]
     pub watch: bool,
+
+    /// Number of modules to process in parallel (max 4). Default is 1. This value is clamped to prevent system overload.
+    #[clap(
+        long,
+        default_value = "1",
+        help = "Number of parallel module processes (max 4)",
+        long_help = "Specify the number of modules to process in parallel. \
+                    The value is clamped to a maximum of 4 to prevent system overload. \
+                    Default is 1 (sequential processing)."
+    )]
+    pub parallel: u32,
 }

@@ -9,7 +9,6 @@ use crate::utils::terraform_operations::{
     select_workspace, save_plan_output, run_single_plan, run_single_apply
 };
 
-/// Manages parallel processing of terraform operations
 pub struct ParallelProcessor {
     operations: Arc<Mutex<VecDeque<TerraformOperation>>>,
     results: Arc<Mutex<Vec<OperationResult>>>,
@@ -19,7 +18,7 @@ pub struct ParallelProcessor {
 }
 
 impl ParallelProcessor {
-    /// Create a new ParallelProcessor with the specified concurrency limit
+    /// Create a new ParallelProcessor with the specified concurrency limit (clamped to 1-4).
     pub fn new(parallel_limit: usize) -> Self {
         Self {
             operations: Arc::new(Mutex::new(VecDeque::new())),
@@ -30,13 +29,13 @@ impl ParallelProcessor {
         }
     }
 
-    /// Add an operation to the processing queue
+    /// Add an operation to the processing queue.
     pub fn add_operation(&self, operation: TerraformOperation) {
         let mut ops = self.operations.lock().unwrap();
         ops.push_back(operation);
     }
 
-    /// Start the worker thread that manages the parallel processing
+    /// Start the worker thread that manages the parallel processing.
     pub fn start(&mut self) {
         let operations = Arc::clone(&self.operations);
         let results = Arc::clone(&self.results);
@@ -109,7 +108,7 @@ impl ParallelProcessor {
         self.worker_handle = Some(handle);
     }
 
-    /// Wait for all operations to complete and return the results
+    /// Wait for all operations to complete and return the results.
     pub fn wait_for_completion(mut self) -> Vec<OperationResult> {
         // Wait for the worker thread to finish
         if let Some(handle) = self.worker_handle.take() {
@@ -121,7 +120,12 @@ impl ParallelProcessor {
         results.clone()
     }
 
-    /// Process a single terraform operation
+    /// Get the parallel limit (for testing purposes).
+    pub fn get_parallel_limit(&self) -> usize {
+        self.parallel_limit
+    }
+
+    /// Process a single terraform operation (internal).
     fn process_operation(operation: &TerraformOperation) -> OperationResult {
         let module_path = &operation.module_path;
         let workspace = &operation.workspace;
@@ -138,7 +142,7 @@ impl ParallelProcessor {
             let mut background_tf = BackgroundTerraform::new();
             match background_tf.init_background(module_path) {
                 Ok(_) => {
-                    match background_tf.wait_for_completion(300) { // 5 minute timeout
+                    match background_tf.wait_for_completion(300) {
                         Ok(success) => {
                             if success {
                                 println!("  ✅ Initialization completed");

@@ -64,7 +64,7 @@ pub fn execute(args: PlanArgs, settings: &Settings) -> anyhow::Result<()> {
             }
             println!("---------------------------------");
 
-            helpers::run_terraform_plan(&filtered_modules, Some(output_dir), args.ignore_workspaces.as_deref(), args.var_files.as_deref(), settings.resolver(), args.watch)
+            helpers::run_terraform_plan(&filtered_modules, Some(output_dir), args.ignore_workspaces.as_deref(), args.var_files.as_deref(), settings.resolver(), args.watch, args.parallel)
                 .map_err(|e| anyhow::anyhow!("Terraform plan failed: {}", e))?;
         }
         Err(e) => {

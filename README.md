@@ -78,6 +78,9 @@ solarboat scan --path ./terraform-modules
 # Plan Terraform changes
 solarboat plan
 
+# Plan with parallel processing (up to 4 modules at once)
+solarboat plan --parallel 4
+
 # Plan and save outputs to a specific directory
 solarboat plan --output-dir ./terraform-plans
 
@@ -223,6 +226,33 @@ solarboat plan --var-files prod.tfvars --watch
 # Watch mode with all modules
 solarboat apply --all --watch
 ```
+
+### Parallel Processing with --parallel
+
+Solar Boat CLI supports safe, robust parallel processing for both `plan` and `apply` commands. You can control the number of modules processed in parallel using the `--parallel` flag:
+
+```bash
+# Plan or apply up to 4 modules in parallel
+solarboat plan --parallel 4
+solarboat apply --parallel 4
+```
+
+- The value for `--parallel` is clamped to a maximum of 4 to prevent system overload.
+- If you specify more modules than the parallel limit, Solar Boat will queue them and process as threads become available.
+- This ensures efficient use of system resources while maintaining safety and reliability.
+- The default is `--parallel 1` (sequential processing).
+
+**Example:**
+
+If you have 10 changed modules and run `solarboat plan --parallel 3`, Solar Boat will process 3 modules at a time, automatically queuing the rest and starting new ones as others finish.
+
+**Safety:**
+
+- The parallel system is designed to avoid resource exhaustion and crashing your machine.
+- All background processes are managed and cleaned up safely.
+- Error propagation and graceful shutdown are built-in.
+
+See the [source code](src/utils/parallel_processor.rs) for implementation details.
 
 ### Module Types
 
@@ -414,6 +444,7 @@ This workflow will:
 | `path`              | Root directory to scan for Terraform modules       | No       | `'.'`             |
 | `all`               | Process all stateful modules regardless of changes | No       | `false`           |
 | `watch`             | Enable real-time Terraform output display          | No       | `false`           |
+| `parallel`          | The number of processes to run in parallel         | No       | `false`           |
 
 #### Workflow Examples
 
