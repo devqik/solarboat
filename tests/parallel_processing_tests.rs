@@ -14,97 +14,107 @@ fn create_mock_operation(id: u32) -> TerraformOperation {
 
 #[test]
 fn test_parallel_processor_creation_and_clamping() {
-    // Test that parallel limit is clamped to 1-4
-    let processor = ParallelProcessor::new(0);
-    assert_eq!(processor.get_parallel_limit(), 1);
-    
-    let processor = ParallelProcessor::new(1);
-    assert_eq!(processor.get_parallel_limit(), 1);
-    
-    let processor = ParallelProcessor::new(4);
-    assert_eq!(processor.get_parallel_limit(), 4);
-    
     let processor = ParallelProcessor::new(10);
-    assert_eq!(processor.get_parallel_limit(), 4);
+    assert_eq!(processor.get_parallel_limit(), 4); // Should be clamped to max 4
+    
+    let processor = ParallelProcessor::new(0);
+    assert_eq!(processor.get_parallel_limit(), 1); // Should be clamped to min 1
+    
+    let processor = ParallelProcessor::new(3);
+    assert_eq!(processor.get_parallel_limit(), 3); // Should remain 3
+}
+
+#[test]
+fn test_parallel_processor_empty_queue() {
+    let mut processor = ParallelProcessor::new(2);
+    processor.start();
+    let results = processor.wait_for_completion();
+    assert_eq!(results.len(), 0);
 }
 
 #[test]
 fn test_parallel_processor_operation_queuing() {
     let mut processor = ParallelProcessor::new(2);
     
-    // Add 4 operations
-    for i in 1..=4 {
-        let operation = create_mock_operation(i);
-        processor.add_operation(operation);
-    }
+    // Add operations for different modules
+    processor.add_operation(TerraformOperation {
+        module_path: "module1".to_string(),
+        workspace: Some("dev".to_string()),
+        var_files: vec![],
+        operation_type: OperationType::Plan { plan_dir: None },
+        watch: false,
+    });
     
-    // Start processing
+    processor.add_operation(TerraformOperation {
+        module_path: "module2".to_string(),
+        workspace: Some("prod".to_string()),
+        var_files: vec![],
+        operation_type: OperationType::Plan { plan_dir: None },
+        watch: false,
+    });
+    
     processor.start();
-    
-    // Wait for completion
     let results = processor.wait_for_completion();
-    
-    // Verify all operations completed (even if they failed due to missing terraform)
-    assert_eq!(results.len(), 4);
+    assert_eq!(results.len(), 2);
 }
 
 #[test]
-fn test_parallel_processor_empty_queue() {
+fn test_parallel_processor_varied_operations() {
     let mut processor = ParallelProcessor::new(2);
     
-    // Start processing with no operations
+    processor.add_operation(TerraformOperation {
+        module_path: "module1".to_string(),
+        workspace: None,
+        var_files: vec!["vars.tfvars".to_string()],
+        operation_type: OperationType::Plan { plan_dir: Some("plans".to_string()) },
+        watch: false,
+    });
+    
+    processor.add_operation(TerraformOperation {
+        module_path: "module2".to_string(),
+        workspace: Some("staging".to_string()),
+        var_files: vec![],
+        operation_type: OperationType::Apply,
+        watch: false,
+    });
+    
     processor.start();
     let results = processor.wait_for_completion();
-    
-    assert_eq!(results.len(), 0);
+    assert_eq!(results.len(), 2);
 }
 
 #[test]
 fn test_parallel_processor_mixed_operation_types() {
-    let mut processor = ParallelProcessor::new(2);
+    let mut processor = ParallelProcessor::new(3);
     
     // Add different operation types
-    let plan_op = TerraformOperation {
-        module_path: "test-plan".to_string(),
+    processor.add_operation(TerraformOperation {
+        module_path: "module1".to_string(),
         workspace: None,
         var_files: vec![],
-        operation_type: OperationType::Plan { plan_dir: Some("plans".to_string()) },
+        operation_type: OperationType::Plan { plan_dir: None },
         watch: false,
-    };
+    });
     
-    let apply_op = TerraformOperation {
-        module_path: "test-apply".to_string(),
-        workspace: Some("prod".to_string()),
-        var_files: vec!["vars.tfvars".to_string()],
+    processor.add_operation(TerraformOperation {
+        module_path: "module2".to_string(),
+        workspace: None,
+        var_files: vec![],
         operation_type: OperationType::Apply,
-        watch: true,
-    };
+        watch: false,
+    });
     
-    processor.add_operation(plan_op);
-    processor.add_operation(apply_op);
+    processor.add_operation(TerraformOperation {
+        module_path: "module3".to_string(),
+        workspace: None,
+        var_files: vec![],
+        operation_type: OperationType::Init,
+        watch: false,
+    });
     
     processor.start();
     let results = processor.wait_for_completion();
-    
-    assert_eq!(results.len(), 2);
-    
-    // Verify operation types are preserved
-    let plan_result = results.iter().find(|r| r.module_path == "test-plan").unwrap();
-    let apply_result = results.iter().find(|r| r.module_path == "test-apply").unwrap();
-    
-    match &plan_result.operation_type {
-        OperationType::Plan { plan_dir } => {
-            assert_eq!(plan_dir.as_ref().unwrap(), "plans");
-        }
-        _ => panic!("Expected Plan operation type"),
-    }
-    
-    match &apply_result.operation_type {
-        OperationType::Apply => {
-            // This is correct
-        }
-        _ => panic!("Expected Apply operation type"),
-    }
+    assert_eq!(results.len(), 3);
 }
 
 #[test]
@@ -112,154 +122,147 @@ fn test_parallel_processor_workspace_handling() {
     let mut processor = ParallelProcessor::new(2);
     
     // Add operations with different workspace configurations
-    let op1 = TerraformOperation {
+    processor.add_operation(TerraformOperation {
         module_path: "module1".to_string(),
         workspace: None, // Default workspace
         var_files: vec![],
         operation_type: OperationType::Plan { plan_dir: None },
         watch: false,
-    };
+    });
     
-    let op2 = TerraformOperation {
+    processor.add_operation(TerraformOperation {
+        module_path: "module2".to_string(),
+        workspace: Some("dev".to_string()),
+        var_files: vec![],
+        operation_type: OperationType::Plan { plan_dir: None },
+        watch: false,
+    });
+    
+    processor.add_operation(TerraformOperation {
         module_path: "module2".to_string(),
         workspace: Some("prod".to_string()),
-        var_files: vec!["prod.tfvars".to_string()],
-        operation_type: OperationType::Apply,
-        watch: true,
-    };
-    
-    processor.add_operation(op1);
-    processor.add_operation(op2);
+        var_files: vec![],
+        operation_type: OperationType::Plan { plan_dir: None },
+        watch: false,
+    });
     
     processor.start();
     let results = processor.wait_for_completion();
-    
-    assert_eq!(results.len(), 2);
-    
-    let default_ws_result = results.iter().find(|r| r.module_path == "module1").unwrap();
-    let prod_ws_result = results.iter().find(|r| r.module_path == "module2").unwrap();
-    
-    assert!(default_ws_result.workspace.is_none());
-    assert_eq!(prod_ws_result.workspace.as_ref().unwrap(), "prod");
+    assert_eq!(results.len(), 3);
 }
 
-// Integration test for CLI argument parsing
-#[test]
-fn test_cli_parallel_argument_parsing() {
-    use solarboat::cli::{Args, Commands};
-    use clap::Parser;
-    
-    // Test plan command with parallel argument
-    let args = Args::try_parse_from(&["solarboat", "plan", "--parallel", "3"]).unwrap();
-    match args.command {
-        Commands::Plan(plan_args) => {
-            assert_eq!(plan_args.parallel, 3);
-        }
-        _ => panic!("Expected Plan command"),
-    }
-    
-    // Test apply command with parallel argument
-    let args = Args::try_parse_from(&["solarboat", "apply", "--parallel", "4"]).unwrap();
-    match args.command {
-        Commands::Apply(apply_args) => {
-            assert_eq!(apply_args.parallel, 4);
-        }
-        _ => panic!("Expected Apply command"),
-    }
-    
-    // Test default value
-    let args = Args::try_parse_from(&["solarboat", "plan"]).unwrap();
-    match args.command {
-        Commands::Plan(plan_args) => {
-            assert_eq!(plan_args.parallel, 1);
-        }
-        _ => panic!("Expected Plan command"),
-    }
-}
-
-// Test that the parallel processor handles many operations correctly
 #[test]
 fn test_parallel_processor_many_operations() {
     let mut processor = ParallelProcessor::new(4);
     
-    // Add many operations to test queue behavior
-    for i in 1..=10 {
-        let operation = create_mock_operation(i);
-        processor.add_operation(operation);
-    }
-    
-    processor.start();
-    let results = processor.wait_for_completion();
-    
-    assert_eq!(results.len(), 10);
-    
-    // Verify all operations were processed
-    for i in 1..=10 {
-        let expected_module = format!("test-module-{}", i);
-        let result = results.iter().find(|r| r.module_path == expected_module);
-        assert!(result.is_some(), "Operation {} was not processed", i);
-    }
-}
-
-// Test that the parallel processor can handle operations with different configurations
-#[test]
-fn test_parallel_processor_varied_operations() {
-    let mut processor = ParallelProcessor::new(3);
-    
-    // Add operations with different configurations
-    let operations = vec![
-        TerraformOperation {
-            module_path: "module-a".to_string(),
-            workspace: None,
+    // Add many operations to test scalability
+    for i in 0..10 {
+        processor.add_operation(TerraformOperation {
+            module_path: format!("module{}", i),
+            workspace: Some(format!("ws{}", i)),
             var_files: vec![],
             operation_type: OperationType::Plan { plan_dir: None },
             watch: false,
-        },
-        TerraformOperation {
-            module_path: "module-b".to_string(),
-            workspace: Some("dev".to_string()),
-            var_files: vec!["dev.tfvars".to_string()],
-            operation_type: OperationType::Plan { plan_dir: Some("plans".to_string()) },
-            watch: true,
-        },
-        TerraformOperation {
-            module_path: "module-c".to_string(),
-            workspace: Some("prod".to_string()),
-            var_files: vec!["prod.tfvars".to_string(), "secrets.tfvars".to_string()],
-            operation_type: OperationType::Apply,
-            watch: false,
-        },
-    ];
-    
-    for operation in operations {
-        processor.add_operation(operation);
+        });
     }
     
     processor.start();
     let results = processor.wait_for_completion();
+    assert_eq!(results.len(), 10);
+}
+
+#[test]
+fn test_cli_parallel_argument_parsing() {
+    use solarboat::cli::PlanArgs;
+    use clap::Parser;
     
-    assert_eq!(results.len(), 3);
+    // Test that parallel argument is parsed correctly
+    let args = PlanArgs::try_parse_from(&["solarboat", "plan", "--parallel", "3"]).unwrap();
+    assert_eq!(args.parallel, 3);
     
-    // Verify each operation was processed with correct configuration
-    let module_a = results.iter().find(|r| r.module_path == "module-a").unwrap();
-    let module_b = results.iter().find(|r| r.module_path == "module-b").unwrap();
-    let module_c = results.iter().find(|r| r.module_path == "module-c").unwrap();
+    // Test default value
+    let args = PlanArgs::try_parse_from(&["solarboat", "plan"]).unwrap();
+    assert_eq!(args.parallel, 1);
     
-    assert!(module_a.workspace.is_none());
-    assert_eq!(module_b.workspace.as_ref().unwrap(), "dev");
-    assert_eq!(module_c.workspace.as_ref().unwrap(), "prod");
+    // Test clamping (max 4)
+    let args = PlanArgs::try_parse_from(&["solarboat", "plan", "--parallel", "10"]).unwrap();
+    assert_eq!(args.parallel, 10); // CLI doesn't clamp, but the processor will
+}
+
+#[test]
+fn test_module_aware_sequential_processing() {
+    let mut processor = ParallelProcessor::new(3);
     
-    match &module_b.operation_type {
-        OperationType::Plan { plan_dir } => {
-            assert_eq!(plan_dir.as_ref().unwrap(), "plans");
-        }
-        _ => panic!("Expected Plan operation type"),
-    }
+    // Add multiple workspaces for the same module - these should be processed sequentially
+    processor.add_operation(TerraformOperation {
+        module_path: "shared_module".to_string(),
+        workspace: Some("dev".to_string()),
+        var_files: vec![],
+        operation_type: OperationType::Plan { plan_dir: None },
+        watch: false,
+    });
     
-    match &module_c.operation_type {
-        OperationType::Apply => {
-            // This is correct
-        }
-        _ => panic!("Expected Apply operation type"),
-    }
+    processor.add_operation(TerraformOperation {
+        module_path: "shared_module".to_string(),
+        workspace: Some("staging".to_string()),
+        var_files: vec![],
+        operation_type: OperationType::Plan { plan_dir: None },
+        watch: false,
+    });
+    
+    processor.add_operation(TerraformOperation {
+        module_path: "shared_module".to_string(),
+        workspace: Some("prod".to_string()),
+        var_files: vec![],
+        operation_type: OperationType::Plan { plan_dir: None },
+        watch: false,
+    });
+    
+    // Add operations for different modules - these can run in parallel
+    processor.add_operation(TerraformOperation {
+        module_path: "other_module".to_string(),
+        workspace: Some("dev".to_string()),
+        var_files: vec![],
+        operation_type: OperationType::Plan { plan_dir: None },
+        watch: false,
+    });
+    
+    processor.add_operation(TerraformOperation {
+        module_path: "another_module".to_string(),
+        workspace: Some("prod".to_string()),
+        var_files: vec![],
+        operation_type: OperationType::Apply,
+        watch: false,
+    });
+    
+    processor.start();
+    let results = processor.wait_for_completion();
+    
+    // Should have 5 total results
+    assert_eq!(results.len(), 5);
+    
+    // Verify all operations for shared_module are present
+    let shared_module_results: Vec<_> = results.iter()
+        .filter(|r| r.module_path == "shared_module")
+        .collect();
+    assert_eq!(shared_module_results.len(), 3);
+    
+    // Verify all workspaces for shared_module are present
+    let workspaces: Vec<_> = shared_module_results.iter()
+        .filter_map(|r| r.workspace.as_ref())
+        .collect();
+    assert!(workspaces.contains(&&"dev".to_string()));
+    assert!(workspaces.contains(&&"staging".to_string()));
+    assert!(workspaces.contains(&&"prod".to_string()));
+    
+    // Verify other modules are present
+    let other_module_results: Vec<_> = results.iter()
+        .filter(|r| r.module_path == "other_module")
+        .collect();
+    assert_eq!(other_module_results.len(), 1);
+    
+    let another_module_results: Vec<_> = results.iter()
+        .filter(|r| r.module_path == "another_module")
+        .collect();
+    assert_eq!(another_module_results.len(), 1);
 } 

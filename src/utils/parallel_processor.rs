@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-use std::collections::VecDeque;
+use std::collections::{VecDeque, HashMap};
 
 use crate::utils::terraform_background::BackgroundTerraform;
 use crate::utils::terraform_operations::{
@@ -9,95 +9,133 @@ use crate::utils::terraform_operations::{
     select_workspace, save_plan_output, run_single_plan, run_single_apply
 };
 
+/// Groups operations by module to prevent Terraform state lock conflicts
+#[derive(Debug)]
+struct ModuleGroup {
+    operations: VecDeque<TerraformOperation>,
+}
+
+impl ModuleGroup {
+    fn new(_module_path: String) -> Self {
+        Self {
+            operations: VecDeque::new(),
+        }
+    }
+
+    fn add_operation(&mut self, operation: TerraformOperation) {
+        self.operations.push_back(operation);
+    }
+
+    fn take_next_operation(&mut self) -> Option<TerraformOperation> {
+        self.operations.pop_front()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.operations.is_empty()
+    }
+}
+
 pub struct ParallelProcessor {
-    operations: Arc<Mutex<VecDeque<TerraformOperation>>>,
+    module_groups: Arc<Mutex<HashMap<String, ModuleGroup>>>,
     results: Arc<Mutex<Vec<OperationResult>>>,
-    active_count: Arc<Mutex<usize>>,
+    active_modules: Arc<Mutex<HashMap<String, bool>>>, // Track which modules are currently being processed
     parallel_limit: usize,
     worker_handle: Option<thread::JoinHandle<()>>,
 }
 
 impl ParallelProcessor {
     /// Create a new ParallelProcessor with the specified concurrency limit (clamped to 1-4).
+    /// This processor groups operations by module to prevent Terraform state lock conflicts.
     pub fn new(parallel_limit: usize) -> Self {
         Self {
-            operations: Arc::new(Mutex::new(VecDeque::new())),
+            module_groups: Arc::new(Mutex::new(HashMap::new())),
             results: Arc::new(Mutex::new(Vec::new())),
-            active_count: Arc::new(Mutex::new(0)),
+            active_modules: Arc::new(Mutex::new(HashMap::new())),
             parallel_limit: parallel_limit.max(1).min(4), // Clamp between 1 and 4
             worker_handle: None,
         }
     }
 
     /// Add an operation to the processing queue.
+    /// Operations are automatically grouped by module to prevent state lock conflicts.
     pub fn add_operation(&self, operation: TerraformOperation) {
-        let mut ops = self.operations.lock().unwrap();
-        ops.push_back(operation);
+        let mut groups = self.module_groups.lock().unwrap();
+        let module_path = operation.module_path.clone();
+        
+        groups.entry(module_path.clone())
+            .or_insert_with(|| ModuleGroup::new(module_path))
+            .add_operation(operation);
     }
 
     /// Start the worker thread that manages the parallel processing.
+    /// This ensures that all workspaces of the same module are processed sequentially
+    /// while different modules can run in parallel.
     pub fn start(&mut self) {
-        let operations = Arc::clone(&self.operations);
+        let module_groups = Arc::clone(&self.module_groups);
         let results = Arc::clone(&self.results);
-        let active_count = Arc::clone(&self.active_count);
+        let active_modules = Arc::clone(&self.active_modules);
         let parallel_limit = self.parallel_limit;
 
         let handle = thread::spawn(move || {
             loop {
-                // Check if there are operations to process
+                // Check if there are any operations to process
                 let has_operations = {
-                    let ops = operations.lock().unwrap();
-                    !ops.is_empty()
+                    let groups = module_groups.lock().unwrap();
+                    groups.values().any(|group| !group.is_empty())
                 };
 
                 if !has_operations {
                     // Check if all operations are complete
-                    let active = active_count.lock().unwrap();
-                    if *active == 0 {
+                    let active = active_modules.lock().unwrap();
+                    if active.is_empty() {
                         break;
                     }
                     thread::sleep(Duration::from_millis(100));
                     continue;
                 }
 
-                // Try to start a new operation
+                // Try to start a new module processing
                 let can_start = {
-                    let mut active = active_count.lock().unwrap();
-                    if *active < parallel_limit {
-                        *active += 1;
-                        true
-                    } else {
-                        false
-                    }
+                    let active = active_modules.lock().unwrap();
+                    active.len() < parallel_limit
                 };
 
                 if can_start {
-                    let operation = {
-                        let mut ops = operations.lock().unwrap();
-                        ops.pop_front()
+                    // Find a module that's not currently being processed
+                    let module_to_process = {
+                        let groups = module_groups.lock().unwrap();
+                        let active = active_modules.lock().unwrap();
+                        
+                        groups.iter()
+                            .filter(|(module_path, group)| {
+                                !group.is_empty() && !active.contains_key(*module_path)
+                            })
+                            .next()
+                            .map(|(module_path, _)| module_path.clone())
                     };
 
-                    if let Some(op) = operation {
+                    if let Some(module_path) = module_to_process {
+                        // Mark this module as active
+                        {
+                            let mut active = active_modules.lock().unwrap();
+                            active.insert(module_path.clone(), true);
+                        }
+
+                        let module_groups = Arc::clone(&module_groups);
                         let results = Arc::clone(&results);
-                        let active_count = Arc::clone(&active_count);
+                        let active_modules = Arc::clone(&active_modules);
                         
                         thread::spawn(move || {
-                            let result = Self::process_operation(&op);
-                            
-                            {
-                                let mut results = results.lock().unwrap();
-                                results.push(result);
-                            }
-                            
-                            {
-                                let mut active = active_count.lock().unwrap();
-                                *active = active.saturating_sub(1);
-                            }
+                            // Process all operations for this module sequentially
+                            Self::process_module_operations(
+                                module_path.clone(),
+                                module_groups,
+                                results,
+                                active_modules
+                            );
                         });
                     } else {
-                        // No operation available, decrement active count
-                        let mut active = active_count.lock().unwrap();
-                        *active = active.saturating_sub(1);
+                        thread::sleep(Duration::from_millis(100));
                     }
                 } else {
                     thread::sleep(Duration::from_millis(100));
@@ -106,6 +144,54 @@ impl ParallelProcessor {
         });
 
         self.worker_handle = Some(handle);
+    }
+
+    /// Process all operations for a specific module sequentially.
+    /// This prevents Terraform state lock conflicts by ensuring all workspaces
+    /// of the same module are processed one after another.
+    fn process_module_operations(
+        module_path: String,
+        module_groups: Arc<Mutex<HashMap<String, ModuleGroup>>>,
+        results: Arc<Mutex<Vec<OperationResult>>>,
+        active_modules: Arc<Mutex<HashMap<String, bool>>>,
+    ) {
+        println!("🔒 Processing module '{}' - all workspaces will be processed sequentially", module_path);
+        
+        loop {
+            // Get the next operation for this module
+            let operation = {
+                let mut groups = module_groups.lock().unwrap();
+                if let Some(group) = groups.get_mut(&module_path) {
+                    group.take_next_operation()
+                } else {
+                    None
+                }
+            };
+
+            if let Some(op) = operation {
+                println!("  📦 Processing workspace: {:?}", op.workspace.as_deref().unwrap_or("default"));
+                
+                // Process the operation
+                let result = Self::process_operation(&op);
+                
+                // Store the result
+                {
+                    let mut results = results.lock().unwrap();
+                    results.push(result);
+                }
+            } else {
+                // No more operations for this module
+                break;
+            }
+        }
+
+        // Mark this module as no longer active
+        {
+            let mut active = active_modules.lock().unwrap();
+            active.remove(&module_path);
+        }
+        
+        println!("✅ Completed all operations for module '{}'", module_path);
     }
 
     /// Wait for all operations to complete and return the results.
