@@ -30,8 +30,16 @@ pub fn run_terraform_apply(
         return plan_helpers::run_terraform_plan(modules, None, ignore_workspaces, var_files, config_resolver, watch, parallel);
     }
 
+    // Force parallel to 1 if watch mode is enabled
+    let effective_parallel = if watch {
+        println!("🔄 Watch mode enabled - forcing parallel processing to 1 for real-time output");
+        1
+    } else {
+        parallel
+    };
+
     // Clamp parallel to max 4
-    let parallel_limit = parallel.min(4) as usize;
+    let parallel_limit = effective_parallel.min(4) as usize;
     
     // Create parallel processor
     let mut processor = ParallelProcessor::new(parallel_limit);

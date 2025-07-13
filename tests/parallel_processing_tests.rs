@@ -1,7 +1,5 @@
 use solarboat::utils::parallel_processor::ParallelProcessor;
 use solarboat::utils::terraform_operations::{TerraformOperation, OperationType};
-use std::thread;
-use std::time::Duration;
 
 // Mock operation for testing
 fn create_mock_operation(id: u32) -> TerraformOperation {
