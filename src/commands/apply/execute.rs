@@ -11,7 +11,7 @@ pub fn execute(args: ApplyArgs, settings: &Settings) -> anyhow::Result<()> {
         println!("⚠️  Running in APPLY mode - changes will be applied!");
     }
 
-    match helpers::get_changed_modules(&args.path, args.all) {
+    match helpers::get_changed_modules(&args.path, args.all, &args.default_branch) {
         Ok(modules) => {
             if args.all {
                 println!("🔍 Found {} stateful modules", modules.len());
