@@ -53,7 +53,7 @@ handles the operational journey so developers can focus on what they do best - w
 cargo install solarboat
 
 # Install a specific version
-cargo install solarboat --version 0.6.0
+cargo install solarboat --version 0.6.1
 ```
 
 ### Building from Source
@@ -98,6 +98,14 @@ solarboat apply --ignore-workspaces prod,staging
 
 # Process all stateful modules regardless of changes
 solarboat apply --all
+
+# Watch background Terraform operations with real-time output
+solarboat plan --watch
+solarboat apply --watch
+
+# Combine watch mode with other flags
+solarboat plan --all --watch --var-files vars.tfvars
+solarboat apply --dry-run=false --watch --ignore-workspaces dev,staging
 ```
 
 ### Command Details
@@ -139,6 +147,82 @@ The apply command implements the changes to your infrastructure. It:
 - Shows real-time progress
 - Filters modules based on the specified path
 - Can process all stateful modules with `--all` flag
+
+### Background Operations with `--watch`
+
+Solar Boat CLI supports background Terraform operations with real-time status updates using the `--watch` flag.
+
+#### Silent Mode (Default)
+
+By default, Terraform operations run silently in the background:
+
+```bash
+# Terraform output is hidden until completion
+solarboat plan
+solarboat apply
+```
+
+**Benefits:**
+
+- Faster execution for CI/CD pipelines
+- Clean output focused on results
+- Reduced noise in automated environments
+
+#### Watch Mode
+
+When using the `--watch` flag, Terraform operations display real-time output:
+
+```bash
+# Real-time Terraform output display
+solarboat plan --watch
+solarboat apply --watch
+```
+
+**Benefits:**
+
+- Real-time progress monitoring
+- Immediate feedback on long-running operations
+- Useful for debugging and troubleshooting
+- See Terraform output as it happens
+
+#### Status Updates
+
+When using `--watch`, you'll see status updates like:
+
+```
+📦 Processing module: infrastructure/networking
+  🔧 Initializing module in background...
+  ✅ Initialization completed
+  🚀 Running terraform plan for default workspace...
+  Plan: 2 to add, 0 to change, 0 to destroy.
+  ✅ Plan completed successfully
+```
+
+#### Timeout Handling
+
+Background operations include automatic timeout handling:
+
+- **Initialization**: 5-minute timeout
+- **Planning**: 10-minute timeout
+- **Application**: 30-minute timeout
+
+#### Combining with Other Flags
+
+The `--watch` flag works seamlessly with all other flags:
+
+```bash
+# Watch mode with path filtering
+solarboat plan --path ./production --watch
+
+# Watch mode with workspace filtering
+solarboat apply --ignore-workspaces dev,staging --watch
+
+# Watch mode with var files
+solarboat plan --var-files prod.tfvars --watch
+
+# Watch mode with all modules
+solarboat apply --all --watch
+```
 
 ### Module Types
 
@@ -290,14 +374,14 @@ jobs:
 
       - name: Scan for Changes
         if: github.event_name == 'pull_request'
-        uses: devqik/solarboat-action@latest
+        uses: devqik/solarboat@v0.6.1
         with:
           command: scan
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Plan Infrastructure Changes
         if: github.event_name == 'pull_request'
-        uses: devqik/solarboat-action@latest
+        uses: devqik/solarboat@v0.6.1
         with:
           command: plan
           output_dir: terraform-plans
@@ -305,7 +389,7 @@ jobs:
 
       - name: Apply Infrastructure Changes
         if: github.ref == 'refs/heads/main'
-        uses: devqik/solarboat-action@latest
+        uses: devqik/solarboat@v0.6.1
         with:
           command: apply
           apply_dry_run: false # Set to true for dry-run mode
@@ -329,6 +413,7 @@ This workflow will:
 | `ignore_workspaces` | Comma-separated list of workspaces to ignore       | No       | `''`              |
 | `path`              | Root directory to scan for Terraform modules       | No       | `'.'`             |
 | `all`               | Process all stateful modules regardless of changes | No       | `false`           |
+| `watch`             | Enable real-time Terraform output display          | No       | `false`           |
 
 #### Workflow Examples
 
@@ -336,12 +421,12 @@ This workflow will:
 
 ```yaml
 - name: Scan Changes
-  uses: devqik/solarboat@v0.6.0
+  uses: devqik/solarboat@v0.6.1
   with:
     command: scan
 
 - name: Plan Changes
-  uses: devqik/solarboat@v0.6.0
+  uses: devqik/solarboat@v0.6.1
   with:
     command: plan
     plan_output_dir: my-plans
@@ -351,7 +436,7 @@ This workflow will:
 
 ```yaml
 - name: Apply Changes
-  uses: devqik/solarboat@v0.6.0
+  uses: devqik/solarboat@v0.6.1
   with:
     command: apply
     ignore_workspaces: dev,staging,test
@@ -362,11 +447,22 @@ This workflow will:
 
 ```yaml
 - name: Plan Specific Modules
-  uses: devqik/solarboat@v0.6.0
+  uses: devqik/solarboat@v0.6.1
   with:
     command: plan
     path: ./terraform-modules/production
     plan_output_dir: prod-plans
+```
+
+**Watch Mode for Real-time Output:**
+
+```yaml
+- name: Plan with Real-time Output
+  uses: devqik/solarboat@v0.6.1
+  with:
+    command: plan
+    watch: true
+    plan_output_dir: terraform-plans
 ```
 
 **Complete Workflow with Conditions:**
@@ -380,7 +476,7 @@ jobs:
 
       # Run on all branches
       - name: Plan Changes
-        uses: devqik/solarboat@v0.6.0
+        uses: devqik/solarboat@v0.6.1
         with:
           command: plan
           plan_output_dir: terraform-plans
@@ -389,7 +485,7 @@ jobs:
       # Run only on main branch
       - name: Apply Changes
         if: github.ref == 'refs/heads/main'
-        uses: devqik/solarboat@v0.6.0
+        uses: devqik/solarboat@v0.6.1
         with:
           command: apply
           apply_dry_run: false

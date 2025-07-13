@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use crate::commands::scan::helpers;
 use crate::config::ConfigResolver;
+use crate::utils::terraform_background::{BackgroundTerraform, run_terraform_silent};
 use regex::Regex;
 
 #[derive(Debug)]
@@ -22,6 +23,7 @@ pub fn run_terraform_plan(
     ignore_workspaces: Option<&[String]>,
     var_files: Option<&[String]>,
     config_resolver: &ConfigResolver,
+    watch: bool,
 ) -> Result<(), String> {
 
     let mut failed_modules = Vec::new();
@@ -29,21 +31,47 @@ pub fn run_terraform_plan(
     for module in modules {
         println!("\n📦 Processing module: {}", module);
 
-        println!("  🔧 Initializing module...");
-        let init_status = Command::new("terraform")
-            .arg("init")
-            .current_dir(module)
-            .status()
-            .map_err(|e| e.to_string())?;
-
-        if !init_status.success() {
-            println!("  ❌ Initialization failed, skipping module");
-            failed_modules.push(ModuleError {
-                path: module.clone(),
-                command: "init".to_string(),
-                error: "Initialization failed".to_string(),
-            });
-            continue;
+        if watch {
+            println!("  🔧 Initializing module in background...");
+            let mut background_tf = BackgroundTerraform::new();
+            background_tf.init_background(module)?;
+            
+            // Wait for initialization to complete
+            match background_tf.wait_for_completion(300) { // 5 minute timeout
+                Ok(success) => {
+                    if !success {
+                        println!("  ❌ Initialization failed, skipping module");
+                        failed_modules.push(ModuleError {
+                            path: module.clone(),
+                            command: "init".to_string(),
+                            error: "Initialization failed".to_string(),
+                        });
+                        continue;
+                    }
+                    println!("  ✅ Initialization completed");
+                }
+                Err(e) => {
+                    println!("  ❌ Initialization failed: {}, skipping module", e);
+                    failed_modules.push(ModuleError {
+                        path: module.clone(),
+                        command: "init".to_string(),
+                        error: format!("Initialization failed: {}", e),
+                    });
+                    continue;
+                }
+            }
+        } else {
+            println!("  🔧 Initializing module...");
+            let init_success = run_terraform_silent("init", &[], module, None)?;
+            if !init_success {
+                println!("  ❌ Initialization failed, skipping module");
+                failed_modules.push(ModuleError {
+                    path: module.clone(),
+                    command: "init".to_string(),
+                    error: "Initialization failed".to_string(),
+                });
+                continue;
+            }
         }
 
         let workspaces = get_workspaces(module)?;
@@ -55,12 +83,43 @@ pub fn run_terraform_plan(
             if !default_var_files.is_empty() {
                 println!("  📄 Using {} var files for default workspace", default_var_files.len());
             }
-            if !run_single_plan(module, plan_dir, Some(&default_var_files))? {
-                failed_modules.push(ModuleError {
-                    path: module.clone(),
-                    command: "plan".to_string(),
-                    error: "Plan failed".to_string(),
-                });
+            
+            if watch {
+                let mut background_tf = BackgroundTerraform::new();
+                background_tf.plan_background(module, Some(&default_var_files))?;
+                
+                // Wait for plan to complete
+                match background_tf.wait_for_completion(600) { // 10 minute timeout
+                    Ok(success) => {
+                        if !success {
+                            failed_modules.push(ModuleError {
+                                path: module.clone(),
+                                command: "plan".to_string(),
+                                error: "Plan failed".to_string(),
+                            });
+                        } else {
+                            // Save plan output if plan_dir is specified
+                            if let Some(plan_dir) = plan_dir {
+                                save_plan_output(module, plan_dir, &background_tf.get_output())?;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        failed_modules.push(ModuleError {
+                            path: module.clone(),
+                            command: "plan".to_string(),
+                            error: format!("Plan failed: {}", e),
+                        });
+                    }
+                }
+            } else {
+                if !run_single_plan(module, plan_dir, Some(&default_var_files))? {
+                    failed_modules.push(ModuleError {
+                        path: module.clone(),
+                        command: "plan".to_string(),
+                        error: "Plan failed".to_string(),
+                    });
+                }
             }
         } else {
             println!("  🌐 Found multiple workspaces: {:?}", workspaces);
@@ -87,12 +146,43 @@ pub fn run_terraform_plan(
                 if !workspace_var_files.is_empty() {
                     println!("  📄 Using {} var files for workspace {}", workspace_var_files.len(), workspace);
                 }
-                if !run_single_plan(module, plan_dir, Some(&workspace_var_files))? {
-                    failed_modules.push(ModuleError {
-                        path: format!("{}:{}", module, workspace),
-                        command: "plan".to_string(),
-                        error: format!("Plan failed for workspace {}", workspace),
-                    });
+                
+                if watch {
+                    let mut background_tf = BackgroundTerraform::new();
+                    background_tf.plan_background(module, Some(&workspace_var_files))?;
+                    
+                    // Wait for plan to complete
+                    match background_tf.wait_for_completion(600) { // 10 minute timeout
+                        Ok(success) => {
+                            if !success {
+                                failed_modules.push(ModuleError {
+                                    path: format!("{}:{}", module, workspace),
+                                    command: "plan".to_string(),
+                                    error: format!("Plan failed for workspace {}", workspace),
+                                });
+                            } else {
+                                // Save plan output if plan_dir is specified
+                                if let Some(plan_dir) = plan_dir {
+                                    save_plan_output(module, plan_dir, &background_tf.get_output())?;
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            failed_modules.push(ModuleError {
+                                path: format!("{}:{}", module, workspace),
+                                command: "plan".to_string(),
+                                error: format!("Plan failed for workspace {}: {}", workspace, e),
+                            });
+                        }
+                    }
+                } else {
+                    if !run_single_plan(module, plan_dir, Some(&workspace_var_files))? {
+                        failed_modules.push(ModuleError {
+                            path: format!("{}:{}", module, workspace),
+                            command: "plan".to_string(),
+                            error: format!("Plan failed for workspace {}", workspace),
+                        });
+                    }
                 }
             }
         }
@@ -208,6 +298,33 @@ fn run_single_plan(module: &str, plan_dir: Option<&str>, var_files: Option<&[Str
     }
 
     Ok(true)
+}
+
+fn save_plan_output(module: &str, plan_dir: &str, output_lines: &[String]) -> Result<(), String> {
+    // Create the plan directory if it doesn't exist
+    std::fs::create_dir_all(plan_dir)
+        .map_err(|e| format!("Failed to create plan directory: {}", e))?;
+        
+    if let Some(module_name) = Path::new(module).file_name().and_then(|n| n.to_str()) {
+        let plan_file = Path::new(plan_dir).join(format!("{}.tfplan.md", module_name));
+        
+        // Join all output lines
+        let plan_output = output_lines.join("\n");
+        
+        // Strip ANSI color codes and format the output
+        let cleaned_output = clean_terraform_output(&plan_output);
+        
+        // Create markdown content with the plan inside a code block
+        let markdown_content = format!("```terraform\n{}\n```", cleaned_output);
+        
+        // Write the markdown content to a file
+        std::fs::write(&plan_file, markdown_content)
+            .map_err(|e| format!("Failed to write plan file: {}", e))?;
+            
+        println!("  ✅ Plan saved to: {}", plan_file.to_str().unwrap());
+    }
+    
+    Ok(())
 }
 
 // Helper function to clean Terraform output by removing ANSI codes and formatting

@@ -3,6 +3,7 @@ use std::process::Command;
 use crate::commands::scan::helpers;
 use crate::commands::plan::helpers as plan_helpers;
 use crate::config::ConfigResolver;
+use crate::utils::terraform_background::{BackgroundTerraform, run_terraform_silent};
 
 #[derive(Debug)]
 pub struct ModuleError {
@@ -22,11 +23,12 @@ pub fn run_terraform_apply(
     ignore_workspaces: Option<&[String]>,
     var_files: Option<&[String]>,
     config_resolver: &ConfigResolver,
+    watch: bool,
 ) -> Result<(), String> {
     
     if dry_run {
         println!("🔍 Running in dry-run mode - executing plan instead of apply");
-        return plan_helpers::run_terraform_plan(modules, None, ignore_workspaces, var_files, config_resolver);
+        return plan_helpers::run_terraform_plan(modules, None, ignore_workspaces, var_files, config_resolver, watch);
     }
 
     let mut failed_modules = Vec::new();
@@ -34,21 +36,47 @@ pub fn run_terraform_apply(
     for module in modules {
         println!("\n📦 Processing module: {}", module);
 
-        println!("  🔧 Initializing module...");
-        let init_status = Command::new("terraform")
-            .arg("init")
-            .current_dir(module)
-            .status()
-            .map_err(|e| e.to_string())?;
-
-        if !init_status.success() {
-            println!("  ❌ Initialization failed, skipping module");
-            failed_modules.push(ModuleError {
-                path: module.clone(),
-                command: "init".to_string(),
-                error: "Initialization failed".to_string(),
-            });
-            continue;
+        if watch {
+            println!("  🔧 Initializing module in background...");
+            let mut background_tf = BackgroundTerraform::new();
+            background_tf.init_background(module)?;
+            
+            // Wait for initialization to complete
+            match background_tf.wait_for_completion(300) { // 5 minute timeout
+                Ok(success) => {
+                    if !success {
+                        println!("  ❌ Initialization failed, skipping module");
+                        failed_modules.push(ModuleError {
+                            path: module.clone(),
+                            command: "init".to_string(),
+                            error: "Initialization failed".to_string(),
+                        });
+                        continue;
+                    }
+                    println!("  ✅ Initialization completed");
+                }
+                Err(e) => {
+                    println!("  ❌ Initialization failed: {}, skipping module", e);
+                    failed_modules.push(ModuleError {
+                        path: module.clone(),
+                        command: "init".to_string(),
+                        error: format!("Initialization failed: {}", e),
+                    });
+                    continue;
+                }
+            }
+        } else {
+            println!("  🔧 Initializing module...");
+            let init_success = run_terraform_silent("init", &[], module, None)?;
+            if !init_success {
+                println!("  ❌ Initialization failed, skipping module");
+                failed_modules.push(ModuleError {
+                    path: module.clone(),
+                    command: "init".to_string(),
+                    error: "Initialization failed".to_string(),
+                });
+                continue;
+            }
         }
 
         let workspaces = plan_helpers::get_workspaces(module)?;
@@ -60,12 +88,38 @@ pub fn run_terraform_apply(
             if !default_var_files.is_empty() {
                 println!("  📄 Using {} var files for default workspace", default_var_files.len());
             }
-            if !run_single_apply(module, Some(&default_var_files))? {
-                failed_modules.push(ModuleError {
-                    path: module.clone(),
-                    command: "apply".to_string(),
-                    error: "Apply failed".to_string(),
-                });
+            
+            if watch {
+                let mut background_tf = BackgroundTerraform::new();
+                background_tf.apply_background(module, Some(&default_var_files))?;
+                
+                // Wait for apply to complete
+                match background_tf.wait_for_completion(1800) { // 30 minute timeout
+                    Ok(success) => {
+                        if !success {
+                            failed_modules.push(ModuleError {
+                                path: module.clone(),
+                                command: "apply".to_string(),
+                                error: "Apply failed".to_string(),
+                            });
+                        }
+                    }
+                    Err(e) => {
+                        failed_modules.push(ModuleError {
+                            path: module.clone(),
+                            command: "apply".to_string(),
+                            error: format!("Apply failed: {}", e),
+                        });
+                    }
+                }
+            } else {
+                if !run_single_apply(module, Some(&default_var_files))? {
+                    failed_modules.push(ModuleError {
+                        path: module.clone(),
+                        command: "apply".to_string(),
+                        error: "Apply failed".to_string(),
+                    });
+                }
             }
         } else {
             println!("  🌐 Found multiple workspaces: {:?}", workspaces);
@@ -92,12 +146,38 @@ pub fn run_terraform_apply(
                 if !workspace_var_files.is_empty() {
                     println!("  📄 Using {} var files for workspace {}", workspace_var_files.len(), workspace);
                 }
-                if !run_single_apply(module, Some(&workspace_var_files))? {
-                    failed_modules.push(ModuleError {
-                        path: format!("{}:{}", module, workspace),
-                        command: "apply".to_string(),
-                        error: format!("Apply failed for workspace {}", workspace),
-                    });
+                
+                if watch {
+                    let mut background_tf = BackgroundTerraform::new();
+                    background_tf.apply_background(module, Some(&workspace_var_files))?;
+                    
+                    // Wait for apply to complete
+                    match background_tf.wait_for_completion(1800) { // 30 minute timeout
+                        Ok(success) => {
+                            if !success {
+                                failed_modules.push(ModuleError {
+                                    path: format!("{}:{}", module, workspace),
+                                    command: "apply".to_string(),
+                                    error: format!("Apply failed for workspace {}", workspace),
+                                });
+                            }
+                        }
+                        Err(e) => {
+                            failed_modules.push(ModuleError {
+                                path: format!("{}:{}", module, workspace),
+                                command: "apply".to_string(),
+                                error: format!("Apply failed for workspace {}: {}", workspace, e),
+                            });
+                        }
+                    }
+                } else {
+                    if !run_single_apply(module, Some(&workspace_var_files))? {
+                        failed_modules.push(ModuleError {
+                            path: format!("{}:{}", module, workspace),
+                            command: "apply".to_string(),
+                            error: format!("Apply failed for workspace {}", workspace),
+                        });
+                    }
                 }
             }
         }
