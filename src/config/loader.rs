@@ -89,11 +89,7 @@ impl ConfigLoader {
                 if let Ok(env) = env::var("SOLARBOAT_ENV") {
                     if !env.trim().is_empty() && filename.contains(&env) {
                         println!("📄 Detected SOLARBOAT_ENV='{}', loading environment-specific config: {}", env, config_path.display());
-                    } else {
-                        println!("📄 Loading configuration from: {}", config_path.display());
                     }
-                } else {
-                    println!("📄 Loading configuration from: {}", config_path.display());
                 }
                 return Ok(Some(config_path));
             }

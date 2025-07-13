@@ -124,6 +124,26 @@ pub struct PlanArgs {
                     Example: --var-files var1.tfvars,var2.tfvars"
     )]
     pub var_files: Option<Vec<String>>,
+
+    #[clap(
+        long,
+        help = "Watch background Terraform operations and display real-time status",
+        long_help = "When enabled, Terraform operations will run in the background \
+                    and this CLI will display real-time status updates. \
+                    Without this flag, Terraform output is hidden until completion."
+    )]
+    pub watch: bool,
+
+    /// Number of modules to process in parallel (max 4). Default is 1. This value is clamped to prevent system overload.
+    #[clap(
+        long,
+        default_value = "1",
+        help = "Number of parallel module processes (max 4)",
+        long_help = "Specify the number of modules to process in parallel. \
+                    The value is clamped to a maximum of 4 to prevent system overload. \
+                    Default is 1 (sequential processing)."
+    )]
+    pub parallel: u32,
 }
 
 #[derive(Parser)]
@@ -172,4 +192,24 @@ pub struct ApplyArgs {
                     Example: --var-files var1.tfvars,var2.tfvars"
     )]
     pub var_files: Option<Vec<String>>,
+
+    #[clap(
+        long,
+        help = "Watch background Terraform operations and display real-time status",
+        long_help = "When enabled, Terraform operations will run in the background \
+                    and this CLI will display real-time status updates. \
+                    Without this flag, Terraform output is hidden until completion."
+    )]
+    pub watch: bool,
+
+    /// Number of modules to process in parallel (max 4). Default is 1. This value is clamped to prevent system overload.
+    #[clap(
+        long,
+        default_value = "1",
+        help = "Number of parallel module processes (max 4)",
+        long_help = "Specify the number of modules to process in parallel. \
+                    The value is clamped to a maximum of 4 to prevent system overload. \
+                    Default is 1 (sequential processing)."
+    )]
+    pub parallel: u32,
 }
