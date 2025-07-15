@@ -89,7 +89,7 @@ cargo build
 # Apply all stateful modules		solarboat apply --all
 
 # Real-time output			solarboat plan --watch
-# Combine flags			solarboat plan --all --watch --var-files vars.tfvars
+# Combine flags			    solarboat plan --all --watch --var-files vars.tfvars
 ```
 
 ### Command Overview
