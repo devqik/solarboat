@@ -25,9 +25,8 @@ fn print_banner() {
     println!();
     println!("  {}  {}", "🚤".bold().blue(), "Solarboat CLI".bold().bright_yellow());
     println!("  {}", "Modern Terraform Automation for DevOps & GitOps".italic().bright_blue());
-    println!("  {}", "Happy infrastructure automation journey!".italic().bright_green());
-    println!("  {}", "https://github.com/devqik/solarboat".italic().bright_purple());
-    println!("  {}", "License: BSD-3-Clause".italic().bright_cyan());
+    println!("  {}", "Happy boating ... !!!".italic().bright_green());
+    println!("  {}", "https://solarboat.io".italic().bright_purple());
     println!();
 }
 
