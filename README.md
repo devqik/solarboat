@@ -47,7 +47,14 @@ Inspired by the Ancient Egyptian solar boats that carried Pharaohs through their
 ```bash
 cargo install solarboat
 # Or install a specific version
-cargo install solarboat --version 0.7.1
+cargo install solarboat --version 0.7.2
+```
+
+**From Release Binaries:**
+
+```bash
+curl -L https://github.com/devqik/solarboat/releases/latest/download/solarboat-x86_64-unknown-linux-gnu.tar.gz | tar xz
+sudo mv solarboat /usr/local/bin/
 ```
 
 **From Source:**
@@ -168,19 +175,19 @@ Solarboat comes with a GitHub Action for CI/CD automation.
 - uses: actions/checkout@v3
   with: { fetch-depth: 0 }
 - name: Scan for Changes
-  uses: devqik/solarboat@v0.7.1
+  uses: devqik/solarboat@v0.7.2
   with:
     command: scan
     github_token: ${{ secrets.GITHUB_TOKEN }}
 - name: Plan Infrastructure Changes
-  uses: devqik/solarboat@v0.7.1
+  uses: devqik/solarboat@v0.7.2
   with:
     command: plan
     output_dir: terraform-plans
     github_token: ${{ secrets.GITHUB_TOKEN }}
 - name: Apply Infrastructure Changes
   if: github.ref == 'refs/heads/main'
-  uses: devqik/solarboat@v0.7.1
+  uses: devqik/solarboat@v0.7.2
   with:
     command: apply
     apply_dry_run: false
@@ -205,7 +212,7 @@ Solarboat comes with a GitHub Action for CI/CD automation.
 - Plan with workspace filtering:
   ```yaml
   - name: Apply Changes
-    uses: devqik/solarboat@v0.7.1
+    uses: devqik/solarboat@v0.7.2
     with:
       command: apply
       ignore_workspaces: dev,staging,test
@@ -214,7 +221,7 @@ Solarboat comes with a GitHub Action for CI/CD automation.
 - Targeted operations:
   ```yaml
   - name: Plan Specific Modules
-    uses: devqik/solarboat@v0.7.1
+    uses: devqik/solarboat@v0.7.2
     with:
       command: plan
       path: ./terraform-modules/production
@@ -223,7 +230,7 @@ Solarboat comes with a GitHub Action for CI/CD automation.
 - Real-time output:
   ```yaml
   - name: Plan with Real-time Output
-    uses: devqik/solarboat@v0.7.1
+    uses: devqik/solarboat@v0.7.2
     with:
       command: plan
       watch: true
@@ -257,4 +264,4 @@ This project needs your support! If you find Solarboat CLI useful, please consid
 
 Your support will help make this project better and encourage its continued development.
 
-~ [@devqik](https://github.com/devqik) (Creator)
+~ [@devqik](https://devqik.com) (Creator)

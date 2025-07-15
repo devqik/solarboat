@@ -5,6 +5,7 @@ pub mod utils;
 
 use clap::Parser;
 use colored::*;
+use std::env;
 
 fn print_banner() {
     // ASCII art for 'Solarboat' (user-provided, each line a different color)
@@ -31,7 +32,12 @@ fn print_banner() {
 }
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
-    print_banner();
+    let args: Vec<String> = env::args().collect();
+    // Show banner only if --help or help is present as a top-level arg
+    let show_banner = args.iter().any(|a| a == "--help" || a == "-h" || a == "help");
+    if show_banner {
+        print_banner();
+    }
     let cli = cli::Args::parse();
     Ok(commands::handle_command(cli)?)
 }
