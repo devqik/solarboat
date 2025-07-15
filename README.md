@@ -36,7 +36,7 @@ Inspired by the Ancient Egyptian solar boats that carried Pharaohs through their
   - Path-based filtering for targeted runs
 - **Coming Soon**
   - AI agent
-  - Ephemeral environments on Kubernetes
+  - Automatic state management
   - Custom workflow automation
 
 ---
