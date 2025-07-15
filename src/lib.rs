@@ -26,6 +26,7 @@ fn print_banner() {
     println!("  {}", "Modern Terraform Automation for DevOps & GitOps".italic().bright_blue());
     println!("  {}", "Happy infrastructure automation journey!".italic().bright_green());
     println!("  {}", "https://github.com/devqik/solarboat".italic().bright_purple());
+    println!("  {}", "License: BSD-3-Clause".italic().bright_cyan());
     println!();
 }
 
