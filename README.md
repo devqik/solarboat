@@ -48,7 +48,7 @@ Inspired by the Ancient Egyptian solar boats that carried Pharaohs through their
 ```bash
 cargo install solarboat
 # Or install a specific version
-cargo install solarboat --version 0.7.2
+cargo install solarboat --version 0.7.3
 ```
 
 **From Release Binaries:**
@@ -176,19 +176,19 @@ Solarboat comes with a GitHub Action for CI/CD automation.
 - uses: actions/checkout@v3
   with: { fetch-depth: 0 }
 - name: Scan for Changes
-  uses: devqik/solarboat@v0.7.2
+  uses: devqik/solarboat@v0.7.3
   with:
     command: scan
     github_token: ${{ secrets.GITHUB_TOKEN }}
 - name: Plan Infrastructure Changes
-  uses: devqik/solarboat@v0.7.2
+  uses: devqik/solarboat@v0.7.3
   with:
     command: plan
     output_dir: terraform-plans
     github_token: ${{ secrets.GITHUB_TOKEN }}
 - name: Apply Infrastructure Changes
   if: github.ref == 'refs/heads/main'
-  uses: devqik/solarboat@v0.7.2
+  uses: devqik/solarboat@v0.7.3
   with:
     command: apply
     apply_dry_run: false
@@ -213,7 +213,7 @@ Solarboat comes with a GitHub Action for CI/CD automation.
 - Plan with workspace filtering:
   ```yaml
   - name: Apply Changes
-    uses: devqik/solarboat@v0.7.2
+    uses: devqik/solarboat@v0.7.3
     with:
       command: apply
       ignore_workspaces: dev,staging,test
@@ -222,7 +222,7 @@ Solarboat comes with a GitHub Action for CI/CD automation.
 - Targeted operations:
   ```yaml
   - name: Plan Specific Modules
-    uses: devqik/solarboat@v0.7.2
+    uses: devqik/solarboat@v0.7.3
     with:
       command: plan
       path: ./terraform-modules/production
@@ -231,7 +231,7 @@ Solarboat comes with a GitHub Action for CI/CD automation.
 - Real-time output:
   ```yaml
   - name: Plan with Real-time Output
-    uses: devqik/solarboat@v0.7.2
+    uses: devqik/solarboat@v0.7.3
     with:
       command: plan
       watch: true
