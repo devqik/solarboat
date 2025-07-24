@@ -181,6 +181,8 @@ Solarboat comes with a GitHub Action for CI/CD automation.
     command: scan
     github_token: ${{ secrets.GITHUB_TOKEN }}
 - name: Plan Infrastructure Changes
+  # Only run plan when a PR is open
+  if: github.event_name == 'pull_request'
   uses: devqik/solarboat@v0.7.3
   with:
     command: plan
@@ -222,6 +224,8 @@ Solarboat comes with a GitHub Action for CI/CD automation.
 - Targeted operations:
   ```yaml
   - name: Plan Specific Modules
+    # Only run plan when a PR is open
+    if: github.event_name == 'pull_request'
     uses: devqik/solarboat@v0.7.3
     with:
       command: plan
@@ -231,6 +235,8 @@ Solarboat comes with a GitHub Action for CI/CD automation.
 - Real-time output:
   ```yaml
   - name: Plan with Real-time Output
+    # Only run plan when a PR is open
+    if: github.event_name == 'pull_request'
     uses: devqik/solarboat@v0.7.3
     with:
       command: plan
