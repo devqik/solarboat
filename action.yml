@@ -8,16 +8,40 @@ inputs:
   command:
     description: 'Command to run (scan, plan, or apply)'
     required: true
-  plan_output_dir:
+  output-dir:
     description: 'Directory to save Terraform plan files'
     default: 'terraform-plans'
     required: false
-  apply_dry_run:
+  apply-dryrun:
     description: 'Run apply in dry-run mode (enabled by default for safety)'
     default: 'true'
     required: false
-  ignore_workspaces:
+  ignore-workspaces:
     description: 'Comma-separated list of workspaces to ignore'
+    required: false
+    default: ''
+  path:
+    description: 'Directory to scan for modules (default: .)'
+    required: false
+    default: '.'
+  all:
+    description: 'Process all stateful modules regardless of changes'
+    required: false
+    default: 'false'
+  watch:
+    description: 'Show real-time output (forces parallel=1)'
+    required: false
+    default: 'false'
+  parallel:
+    description: 'Number of parallel module processes (max 4)'
+    required: false
+    default: '1'
+  default-branch:
+    description: 'Default git branch to compare against for changes'
+    required: false
+    default: 'main'
+  var-files:
+    description: 'Comma-separated list of var files to use'
     required: false
     default: ''
   github_token:
@@ -49,18 +73,50 @@ runs:
       run: |
         echo "🚀 Running Solarboat CLI"
         
-        # Build the ignore workspaces argument if provided
+        # Build CLI args from inputs
         IGNORE_WORKSPACES_ARG=""
-        if [ ! -z "${{ inputs.ignore_workspaces }}" ]; then
-          IGNORE_WORKSPACES_ARG="--ignore-workspaces ${{ inputs.ignore_workspaces }}"
+        if [ ! -z "${{ inputs.ignore-workspaces }}" ]; then
+          IGNORE_WORKSPACES_ARG="--ignore-workspaces ${{ inputs.ignore-workspaces }}"
         fi
-        
+        VAR_FILES_ARG=""
+        if [ ! -z "${{ inputs.var-files }}" ]; then
+          VAR_FILES_ARG="--var-files ${{ inputs.var-files }}"
+        fi
+        ALL_ARG=""
+        if [ "${{ inputs.all }}" == "true" ]; then
+          ALL_ARG="--all"
+        fi
+        WATCH_ARG=""
+        if [ "${{ inputs.watch }}" == "true" ]; then
+          WATCH_ARG="--watch"
+        fi
+        PARALLEL_ARG=""
+        if [ ! -z "${{ inputs.parallel }}" ]; then
+          PARALLEL_ARG="--parallel ${{ inputs.parallel }}"
+        fi
+        DEFAULT_BRANCH_ARG=""
+        if [ ! -z "${{ inputs.default-branch }}" ]; then
+          DEFAULT_BRANCH_ARG="--default-branch ${{ inputs.default-branch }}"
+        fi
+        PATH_ARG=""
+        if [ ! -z "${{ inputs.path }}" ]; then
+          PATH_ARG="--path ${{ inputs.path }}"
+        fi
+        OUTPUT_DIR_ARG=""
+        if [ ! -z "${{ inputs.output-dir }}" ]; then
+          OUTPUT_DIR_ARG="--output-dir ${{ inputs.output-dir }}"
+        fi
+        DRY_RUN_ARG=""
+        if [ ! -z "${{ inputs.apply-dryrun }}" ]; then
+          DRY_RUN_ARG="--dry-run=${{ inputs.apply-dryrun }}"
+        fi
+
         if [[ "${{ inputs.command }}" == "scan" ]]; then
-          solarboat scan
+          solarboat scan $PATH_ARG $ALL_ARG $DEFAULT_BRANCH_ARG
         elif [[ "${{ inputs.command }}" == "plan" ]]; then
-          solarboat plan --output-dir ${{ inputs.plan_output_dir }} $IGNORE_WORKSPACES_ARG
+          solarboat plan $PATH_ARG $OUTPUT_DIR_ARG $IGNORE_WORKSPACES_ARG $ALL_ARG $VAR_FILES_ARG $WATCH_ARG $PARALLEL_ARG $DEFAULT_BRANCH_ARG
         elif [[ "${{ inputs.command }}" == "apply" ]]; then
-          solarboat apply --dry-run=${{ inputs.apply_dry_run }} $IGNORE_WORKSPACES_ARG
+          solarboat apply $PATH_ARG $DRY_RUN_ARG $IGNORE_WORKSPACES_ARG $ALL_ARG $VAR_FILES_ARG $WATCH_ARG $PARALLEL_ARG $DEFAULT_BRANCH_ARG
         else
           echo "❌ Invalid command: ${{ inputs.command }}"
           exit 1
@@ -71,7 +127,7 @@ runs:
       uses: actions/upload-artifact@v4
       with:
         name: terraform-plans
-        path: ${{ inputs.plan_output_dir }}/
+        path: ${{ inputs.output-dir }}/
         retention-days: 5
 
     - name: Comment on PR
