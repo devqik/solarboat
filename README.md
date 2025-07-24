@@ -186,14 +186,14 @@ Solarboat comes with a GitHub Action for CI/CD automation.
   uses: devqik/solarboat@v0.7.4
   with:
     command: plan
-    output_dir: terraform-plans
+    output-dir: terraform-plans
     github_token: ${{ secrets.GITHUB_TOKEN }}
 - name: Apply Infrastructure Changes
   if: github.ref == 'refs/heads/main'
   uses: devqik/solarboat@v0.7.4
   with:
     command: apply
-    apply_dry_run: false
+    apply-dryrun: false
     github_token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
@@ -218,8 +218,8 @@ Solarboat comes with a GitHub Action for CI/CD automation.
     uses: devqik/solarboat@v0.7.4
     with:
       command: apply
-      ignore_workspaces: dev,staging,test
-      apply_dry_run: true
+      ignore-workspaces: dev,staging,test
+      apply-dryrun: true
   ```
 - Targeted operations:
   ```yaml
@@ -230,7 +230,7 @@ Solarboat comes with a GitHub Action for CI/CD automation.
     with:
       command: plan
       path: ./terraform-modules/production
-      plan_output_dir: prod-plans
+      output-dir: prod-plans
   ```
 - Real-time output:
   ```yaml
@@ -241,7 +241,7 @@ Solarboat comes with a GitHub Action for CI/CD automation.
     with:
       command: plan
       watch: true
-      plan_output_dir: terraform-plans
+      output-dir: terraform-plans
   ```
 
 ---
