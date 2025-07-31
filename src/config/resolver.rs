@@ -172,11 +172,25 @@ impl ConfigResolver {
     
     /// Get module-specific configuration
     fn get_module_config(&self, module_path: &str) -> ModuleConfig {
+        let normalized_path = self.normalize_module_path(module_path);
+        
         self.config
             .as_ref()
-            .and_then(|config| config.modules.get(module_path))
+            .and_then(|config| config.modules.get(&normalized_path))
             .cloned()
             .unwrap_or_default()
+    }
+    
+    fn normalize_module_path(&self, module_path: &str) -> String {
+        let module_path = Path::new(module_path);
+        
+        if module_path.is_absolute() {
+            if let Ok(relative_path) = module_path.strip_prefix(&self.config_dir) {
+                return relative_path.to_string_lossy().to_string();
+            }
+        }
+        
+        module_path.to_string_lossy().to_string()
     }
     
     /// Get global configuration

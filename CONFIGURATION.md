@@ -75,8 +75,13 @@ The `modules` section allows you to override global settings for specific module
 #### Module Path
 
 - **Type**: String (key in the modules object)
-- **Description**: Path to the Terraform module relative to the configuration file location
-- **Example**: `"infrastructure/networking"`
+- **Description**: Path to the Terraform module. Can be relative to the configuration file location or absolute path. Solarboat automatically normalizes paths for lookup.
+- **Examples**:
+  - `"infrastructure/networking"` (relative path)
+  - `"terraform/projects/webapp"` (relative path)
+  - `"/absolute/path/to/module"` (absolute path - normalized to relative internally)
+
+**Note**: Module paths are automatically normalized to be relative to the configuration file location for consistent lookup, regardless of whether you specify them as absolute or relative paths.
 
 #### Module Settings
 
@@ -203,6 +208,33 @@ For module `infrastructure/networking` and workspace `prod`:
 - **Final var files**: `["networking.tfvars", "vpc.tfvars", "networking-prod.tfvars", "networking-prod-secrets.tfvars"]`
 
 ## Path Resolution
+
+### Module Paths
+
+Module paths (keys in the `modules` object) are automatically normalized to be relative to the configuration file location. This ensures consistent lookup regardless of how you specify the path:
+
+- **Relative paths**: Used as-is (e.g., `"terraform/projects/webapp"`)
+- **Absolute paths**: Automatically converted to relative paths (e.g., `/full/path/to/terraform/projects/webapp` → `terraform/projects/webapp`)
+
+This normalization happens internally and is transparent to users.
+
+**Example**: If your configuration file is at `/home/user/project/solarboat.json` and you have a module at `/home/user/project/terraform/projects/webapp`, you can specify it in your configuration as:
+
+```json
+{
+  "modules": {
+    "terraform/projects/webapp": {
+      "ignore_workspaces": ["dev"]
+    }
+  }
+}
+```
+
+Solarboat will automatically match this configuration to the discovered module path, regardless of whether the module was found using its absolute or relative path.
+
+### Variable File Paths
+
+Variable file paths are resolved relative to the configuration file location.
 
 ### Relative Paths
 
@@ -355,6 +387,17 @@ solarboat apply
 - Check file permissions
 - Verify file path is correct
 - Ensure JSON syntax is valid
+
+### Module Configuration Not Applied
+
+If your module-specific settings (like `ignore_workspaces` or `workspace_var_files`) are not being applied:
+
+- Ensure you're using `"modules"` as the top-level key (not `"projects"`)
+- Verify the module path matches your directory structure relative to the config file
+- Use relative paths like `"terraform/projects/webapp"` rather than absolute paths in your configuration
+- Check that the module exists and contains `.tf` files
+
+**Note**: As of version 0.8.0+, path normalization automatically handles absolute vs relative path mismatches.
 
 ### Unexpected Variable Files
 

@@ -17,13 +17,12 @@
         "prod": ["networking-prod.tfvars", "networking-prod-secrets.tfvars"]
       }
     },
-    "infrastructure/compute": {
-      "ignore_workspaces": ["staging"],
-      "var_files": ["compute.tfvars"],
+    "terraform/projects/webapp": {
+      "ignore_workspaces": ["test"],
       "workspace_var_files": {
-        "dev": ["compute-dev.tfvars"],
-        "prod": ["compute-prod.tfvars", "compute-prod-secrets.tfvars"]
+        "staging": ["webapp-staging.tfvars"],
+        "prod": ["webapp-prod.tfvars"]
       }
     }
   }
-}
+} 
