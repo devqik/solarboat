@@ -44,122 +44,322 @@ inputs:
     description: 'Comma-separated list of var files to use'
     required: false
     default: ''
+  config:
+    description: 'Path to Solarboat configuration file'
+    required: false
+    default: ''
+  solarboat-version:
+    description: 'Version of Solarboat CLI to use (default: latest)'
+    required: false
+    default: 'latest'
+  terraform-version:
+    description: 'Version of Terraform to use (default: latest)'
+    required: false
+    default: 'latest'
+  continue-on-error:
+    description: 'Continue workflow even if Solarboat fails'
+    required: false
+    default: 'false'
   github_token:
-    description: 'GitHub token for PR comments'
-    required: true
+    description: 'GitHub token for PR comments and API access'
+    required: false
+
+outputs:
+  result:
+    description: 'Result of the Solarboat command (success, failure)'
+    value: ${{ steps.solarboat.outputs.result }}
+  plans-path:
+    description: 'Path to generated Terraform plans'
+    value: ${{ steps.solarboat.outputs.plans-path }}
+  changed-modules:
+    description: 'Number of changed modules found'
+    value: ${{ steps.solarboat.outputs.changed-modules }}
 
 runs:
   using: 'composite'
   steps:
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
-
-    - name: Install Terraform
+    - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
       with:
-        terraform_version: "1.7.4"
+        terraform_version: ${{ inputs.terraform-version }}
+        terraform_wrapper: false
 
     - name: Install Solarboat CLI
       shell: bash
       run: |
-        # Install Solarboat CLI using cargo
-        cargo install solarboat
+        echo "🚀 Installing Solarboat CLI"
+        
+        # Determine version to install
+        VERSION="${{ inputs.solarboat-version }}"
+        if [ "$VERSION" = "latest" ]; then
+          VERSION=$(curl -s https://api.github.com/repos/devqik/solarboat/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "Latest version detected: $VERSION"
+        fi
+        
+        # Detect architecture
+        ARCH=$(uname -m)
+        OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+        
+        case "$ARCH" in
+          x86_64) ARCH="x86_64" ;;
+          aarch64|arm64) ARCH="aarch64" ;;
+          *) echo "❌ Unsupported architecture: $ARCH" && exit 1 ;;
+        esac
+        
+        case "$OS" in
+          linux) OS="unknown-linux-gnu" ;;
+          darwin) OS="apple-darwin" ;;
+          *) echo "❌ Unsupported OS: $OS" && exit 1 ;;
+        esac
+        
+        BINARY_NAME="solarboat-${ARCH}-${OS}"
+        DOWNLOAD_URL="https://github.com/devqik/solarboat/releases/download/${VERSION}/${BINARY_NAME}.tar.gz"
+        
+        echo "Downloading from: $DOWNLOAD_URL"
+        
+        # Download and install with error handling
+        if ! curl -L -f -o solarboat.tar.gz "$DOWNLOAD_URL"; then
+          echo "❌ Failed to download Solarboat binary"
+          echo "Falling back to cargo install..."
+          cargo install solarboat --version "${VERSION#v}" || cargo install solarboat
+        else
+          tar -xzf solarboat.tar.gz
+          chmod +x solarboat
+          sudo mv solarboat /usr/local/bin/
+          rm -f solarboat.tar.gz
+        fi
         
         # Verify installation
-        solarboat --version || (echo "Installation failed" && exit 1)
-
-    - name: Run Solarboat CLI
-      shell: bash
-      run: |
-        echo "🚀 Running Solarboat CLI"
-        
-        # Build CLI args from inputs
-        IGNORE_WORKSPACES_ARG=""
-        if [ ! -z "${{ inputs.ignore-workspaces }}" ]; then
-          IGNORE_WORKSPACES_ARG="--ignore-workspaces ${{ inputs.ignore-workspaces }}"
-        fi
-        VAR_FILES_ARG=""
-        if [ ! -z "${{ inputs.var-files }}" ]; then
-          VAR_FILES_ARG="--var-files ${{ inputs.var-files }}"
-        fi
-        ALL_ARG=""
-        if [ "${{ inputs.all }}" == "true" ]; then
-          ALL_ARG="--all"
-        fi
-        WATCH_ARG=""
-        if [ "${{ inputs.watch }}" == "true" ]; then
-          WATCH_ARG="--watch"
-        fi
-        PARALLEL_ARG=""
-        if [ ! -z "${{ inputs.parallel }}" ]; then
-          PARALLEL_ARG="--parallel ${{ inputs.parallel }}"
-        fi
-        DEFAULT_BRANCH_ARG=""
-        if [ ! -z "${{ inputs.default-branch }}" ]; then
-          DEFAULT_BRANCH_ARG="--default-branch ${{ inputs.default-branch }}"
-        fi
-        PATH_ARG=""
-        if [ ! -z "${{ inputs.path }}" ]; then
-          PATH_ARG="--path ${{ inputs.path }}"
-        fi
-        OUTPUT_DIR_ARG=""
-        if [ ! -z "${{ inputs.output-dir }}" ]; then
-          OUTPUT_DIR_ARG="--output-dir ${{ inputs.output-dir }}"
-        fi
-        DRY_RUN_ARG=""
-        if [ ! -z "${{ inputs.apply-dryrun }}" ]; then
-          DRY_RUN_ARG="--dry-run=${{ inputs.apply-dryrun }}"
-        fi
-
-        if [[ "${{ inputs.command }}" == "scan" ]]; then
-          solarboat scan $PATH_ARG $ALL_ARG $DEFAULT_BRANCH_ARG
-        elif [[ "${{ inputs.command }}" == "plan" ]]; then
-          solarboat plan $PATH_ARG $OUTPUT_DIR_ARG $IGNORE_WORKSPACES_ARG $ALL_ARG $VAR_FILES_ARG $WATCH_ARG $PARALLEL_ARG $DEFAULT_BRANCH_ARG
-        elif [[ "${{ inputs.command }}" == "apply" ]]; then
-          solarboat apply $PATH_ARG $DRY_RUN_ARG $IGNORE_WORKSPACES_ARG $ALL_ARG $VAR_FILES_ARG $WATCH_ARG $PARALLEL_ARG $DEFAULT_BRANCH_ARG
+        if solarboat --version; then
+          echo "✅ Solarboat CLI installed successfully"
         else
-          echo "❌ Invalid command: ${{ inputs.command }}"
+          echo "❌ Solarboat installation verification failed"
           exit 1
         fi
 
+    - name: Validate inputs
+      shell: bash
+      run: |
+        echo "🔍 Validating inputs"
+        
+        # Validate command
+        case "${{ inputs.command }}" in
+          scan|plan|apply) 
+            echo "✅ Valid command: ${{ inputs.command }}"
+            ;;
+          *)
+            echo "❌ Invalid command: ${{ inputs.command }}"
+            echo "Valid commands: scan, plan, apply"
+            exit 1
+            ;;
+        esac
+        
+        # Validate parallel value
+        if [ "${{ inputs.parallel }}" -gt 4 ]; then
+          echo "⚠️ Parallel value capped at 4 (requested: ${{ inputs.parallel }})"
+        fi
+        
+        # Validate paths exist
+        if [ ! -d "${{ inputs.path }}" ]; then
+          echo "❌ Path does not exist: ${{ inputs.path }}"
+          exit 1
+        fi
+        
+        # Check for git repository
+        if ! git rev-parse --git-dir > /dev/null 2>&1; then
+          echo "❌ Not a git repository. Solarboat requires git for change detection."
+          exit 1
+        fi
+        
+        echo "✅ Input validation passed"
+
+    - name: Run Solarboat CLI
+      id: solarboat
+      shell: bash
+      continue-on-error: ${{ inputs.continue-on-error == 'true' }}
+      run: |
+        echo "🚀 Running Solarboat CLI"
+        
+        # Set error handling
+        set -euo pipefail
+        
+        # Build CLI args array
+        ARGS=()
+        
+        # Add path argument
+        if [ -n "${{ inputs.path }}" ] && [ "${{ inputs.path }}" != "." ]; then
+          ARGS+=("--path" "${{ inputs.path }}")
+        fi
+        
+        # Add configuration arguments
+        if [ -n "${{ inputs.config }}" ]; then
+          ARGS+=("--config" "${{ inputs.config }}")
+        fi
+        
+        # Add common arguments
+        if [ -n "${{ inputs.ignore-workspaces }}" ]; then
+          ARGS+=("--ignore-workspaces" "${{ inputs.ignore-workspaces }}")
+        fi
+        
+        if [ -n "${{ inputs.var-files }}" ]; then
+          ARGS+=("--var-files" "${{ inputs.var-files }}")
+        fi
+        
+        if [ "${{ inputs.all }}" = "true" ]; then
+          ARGS+=("--all")
+        fi
+        
+        if [ "${{ inputs.watch }}" = "true" ]; then
+          ARGS+=("--watch")
+        fi
+        
+        if [ -n "${{ inputs.parallel }}" ] && [ "${{ inputs.parallel }}" != "1" ]; then
+          PARALLEL_VALUE=$(( ${{ inputs.parallel }} > 4 ? 4 : ${{ inputs.parallel }} ))
+          ARGS+=("--parallel" "$PARALLEL_VALUE")
+        fi
+        
+        if [ -n "${{ inputs.default-branch }}" ] && [ "${{ inputs.default-branch }}" != "main" ]; then
+          ARGS+=("--default-branch" "${{ inputs.default-branch }}")
+        fi
+        
+        # Command-specific arguments
+        case "${{ inputs.command }}" in
+          plan)
+            if [ -n "${{ inputs.output-dir }}" ]; then
+              ARGS+=("--output-dir" "${{ inputs.output-dir }}")
+            fi
+            ;;
+          apply)
+            if [ -n "${{ inputs.apply-dryrun }}" ]; then
+              ARGS+=("--dry-run=${{ inputs.apply-dryrun }}")
+            fi
+            ;;
+        esac
+        
+        # Execute command with error handling
+        echo "Executing: solarboat ${{ inputs.command }} ${ARGS[*]}"
+        
+        # Capture output and exit code
+        EXIT_CODE=0
+        OUTPUT=$(solarboat "${{ inputs.command }}" "${ARGS[@]}" 2>&1) || EXIT_CODE=$?
+        
+        echo "$OUTPUT"
+        
+        # Set outputs
+        if [ $EXIT_CODE -eq 0 ]; then
+          echo "result=success" >> $GITHUB_OUTPUT
+          echo "✅ Solarboat command completed successfully"
+        else
+          echo "result=failure" >> $GITHUB_OUTPUT
+          echo "❌ Solarboat command failed with exit code: $EXIT_CODE"
+        fi
+        
+        # Extract changed modules count from output
+        CHANGED_MODULES=$(echo "$OUTPUT" | grep -o "Found [0-9]* changed modules" | grep -o "[0-9]*" || echo "0")
+        echo "changed-modules=$CHANGED_MODULES" >> $GITHUB_OUTPUT
+        
+        # Set plans path for plan command
+        if [ "${{ inputs.command }}" = "plan" ]; then
+          echo "plans-path=${{ inputs.output-dir }}" >> $GITHUB_OUTPUT
+        fi
+        
+        # Exit with original code if continue-on-error is false
+        if [ "${{ inputs.continue-on-error }}" != "true" ] && [ $EXIT_CODE -ne 0 ]; then
+          exit $EXIT_CODE
+        fi
+
     - name: Upload Terraform Plans
-      if: inputs.command == 'plan'
+      if: inputs.command == 'plan' && steps.solarboat.outputs.result == 'success'
       uses: actions/upload-artifact@v4
       with:
-        name: terraform-plans
+        name: terraform-plans-${{ github.run_number }}
         path: ${{ inputs.output-dir }}/
-        retention-days: 5
+        retention-days: 30
+        compression-level: 6
+        if-no-files-found: warn
+
+    - name: Generate Summary
+      shell: bash
+      run: |
+        echo "## 🚀 Solarboat CLI Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📊 Execution Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- **Command**: \`${{ inputs.command }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Result**: ${{ steps.solarboat.outputs.result == 'success' && '✅ Success' || '❌ Failed' }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Path**: \`${{ inputs.path }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Changed Modules**: ${{ steps.solarboat.outputs.changed-modules }}" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ inputs.command }}" = "plan" ] && [ "${{ steps.solarboat.outputs.result }}" = "success" ]; then
+          echo "- **Plans Location**: \`${{ steps.solarboat.outputs.plans-path }}\`" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🔧 Configuration" >> $GITHUB_STEP_SUMMARY
+        echo "- **Parallel**: ${{ inputs.parallel }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Default Branch**: ${{ inputs.default-branch }}" >> $GITHUB_STEP_SUMMARY
+        
+        if [ -n "${{ inputs.ignore-workspaces }}" ]; then
+          echo "- **Ignored Workspaces**: \`${{ inputs.ignore-workspaces }}\`" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ -n "${{ inputs.var-files }}" ]; then
+          echo "- **Variable Files**: \`${{ inputs.var-files }}\`" >> $GITHUB_STEP_SUMMARY
+        fi
 
     - name: Comment on PR
-      if: github.event_name == 'pull_request' && inputs.command == 'plan'
+      if: github.event_name == 'pull_request' && inputs.command == 'plan' && steps.solarboat.outputs.result == 'success' && inputs.github_token != ''
       uses: actions/github-script@v7
       with:
         github-token: ${{ inputs.github_token }}
         script: |
           const artifactUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}/artifacts`;
+          const changedModules = '${{ steps.solarboat.outputs.changed-modules }}';
           
-          const comment = `## 🚀 Solarboat CLI Results
-
-          Solarboat has analyzed your Terraform changes and generated plans.
+          const comment = `## 🚀 Solarboat CLI Plan Results
           
-          ### 📋 Summary
-          - ✨ Plans have been generated and uploaded as artifacts
-          - 🔍 Review the plans before merging
-          - ⏱️ Plans will be retained for 5 days
+          ### 📊 Summary
+          - **Changed Modules**: ${changedModules}
+          - **Status**: ✅ Plans generated successfully
+          - **Artifact**: [terraform-plans-${{ github.run_number }}](${artifactUrl})
+          
+          ### 📋 Next Steps
+          ${changedModules === '0' ? 
+            '🎉 No modules were changed - no infrastructure changes detected.' :
+            `1. 📥 Download and review the plan artifacts
+          2. 🔍 Verify the planned changes are expected
+          3. ✅ Approve and merge when ready`}
           
           ### 🔗 Links
-          - [View Plan Artifacts](${artifactUrl})
+          - [View Action Run](${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID})
+          - [Download Plans](${artifactUrl})
           
-          ### ℹ️ Next Steps
-          1. Download and review the plan artifacts
-          2. Address any issues found in the plans
-          3. Merge the PR when ready
+          > 💡 Plans are retained for 30 days and include detailed change information for each module.`;
           
-          > Note: Check the action logs for detailed module processing information.`;
-          
-          github.rest.issues.createComment({
+          // Check if we already commented
+          const comments = await github.rest.issues.listComments({
             owner: context.repo.owner,
             repo: context.repo.repo,
             issue_number: context.issue.number,
-            body: comment
           });
+          
+          const existingComment = comments.data.find(comment => 
+            comment.body.includes('🚀 Solarboat CLI Plan Results')
+          );
+          
+          if (existingComment) {
+            // Update existing comment
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: existingComment.id,
+              body: comment
+            });
+          } else {
+            // Create new comment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment
+            });
+          }

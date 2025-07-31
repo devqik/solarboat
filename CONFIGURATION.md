@@ -397,7 +397,7 @@ If your module-specific settings (like `ignore_workspaces` or `workspace_var_fil
 - Use relative paths like `"terraform/projects/webapp"` rather than absolute paths in your configuration
 - Check that the module exists and contains `.tf` files
 
-**Note**: As of version 0.7.6+, path normalization automatically handles absolute vs relative path mismatches.
+**Note**: As of version 0.8.0+, path normalization automatically handles absolute vs relative path mismatches.
 
 ### Unexpected Variable Files
 

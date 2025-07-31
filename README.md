@@ -48,7 +48,7 @@ Inspired by the Ancient Egyptian solar boats that carried Pharaohs through their
 ```bash
 cargo install solarboat
 # Or install a specific version
-cargo install solarboat --version 0.7.6
+cargo install solarboat --version 0.8.0
 ```
 
 **From Release Binaries:**
@@ -170,79 +170,194 @@ Solarboat will look for `solarboat.prod.json` if set.
 
 Solarboat comes with a GitHub Action for CI/CD automation.
 
-**Basic Workflow:**
+### **GitHub Token Requirements**
+
+The GitHub token is **optional** and only needed for:
+
+- 📝 **PR Comments**: Automatic plan summaries posted to pull requests
+- 📊 **Enhanced Integration**: Access to GitHub API features
+
+**Most common scenarios:**
+
+- ✅ **Basic Usage**: No token required for core functionality (scan, plan, apply)
+- ✅ **PR Comments**: Use `${{ secrets.GITHUB_TOKEN }}` (automatically provided by GitHub)
+- ⚠️ **Custom Permissions**: Use custom token only if default permissions aren't sufficient
+
+### **Basic Workflow (Minimal Setup):**
 
 ```yaml
-- uses: actions/checkout@v3
-  with: { fetch-depth: 0 }
-- name: Scan for Changes
-  uses: devqik/solarboat@v0.7.6
-  with:
-    command: scan
-    github_token: ${{ secrets.GITHUB_TOKEN }}
-- name: Plan Infrastructure Changes
-  # Only run plan when a PR is open
-  if: github.event_name == 'pull_request'
-  uses: devqik/solarboat@v0.7.6
+name: Infrastructure CI/CD
+on: [push, pull_request]
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - name: Scan for Changes
+        uses: devqik/solarboat@v0.8.0
+        with:
+          command: scan
+
+      - name: Plan Infrastructure
+        if: github.event_name == 'pull_request'
+        uses: devqik/solarboat@v0.8.0
+        with:
+          command: plan
+          output-dir: terraform-plans
+          # Add token for PR comments
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Apply Changes
+        if: github.ref == 'refs/heads/main'
+        uses: devqik/solarboat@v0.8.0
+        with:
+          command: apply
+          apply-dryrun: false
+```
+
+### **Production Workflow (Full Features):**
+
+```yaml
+name: Infrastructure Automation
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write # For PR comments
+
+jobs:
+  infrastructure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - name: Plan Infrastructure Changes
+        if: github.event_name == 'pull_request'
+        uses: devqik/solarboat@v0.8.0
+        with:
+          command: plan
+          config: ./infrastructure/solarboat.json
+          terraform-version: "1.8.0"
+          solarboat-version: "v0.8.0"
+          parallel: 3
+          ignore-workspaces: dev,test
+          output-dir: terraform-plans
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Apply Infrastructure Changes
+        if: github.ref == 'refs/heads/main'
+        uses: devqik/solarboat@v0.8.0
+        with:
+          command: apply
+          apply-dryrun: false
+          config: ./infrastructure/solarboat.json
+          terraform-version: "1.8.0"
+          parallel: 2
+          continue-on-error: false
+```
+
+### **Action Inputs:**
+
+| Input               | Description                              | Default           | Required |
+| ------------------- | ---------------------------------------- | ----------------- | -------- |
+| `command`           | Command to run (`scan`, `plan`, `apply`) | -                 | ✅       |
+| `github_token`      | GitHub token for PR comments             | -                 | ❌       |
+| `config`            | Path to Solarboat configuration file     | auto-detect       | ❌       |
+| `output-dir`        | Directory for plan files                 | `terraform-plans` | ❌       |
+| `apply-dryrun`      | Run apply in dry-run mode                | `true`            | ❌       |
+| `ignore-workspaces` | Comma-separated workspaces to ignore     | -                 | ❌       |
+| `var-files`         | Comma-separated var files to use         | -                 | ❌       |
+| `path`              | Directory to scan for modules            | `.`               | ❌       |
+| `all`               | Process all stateful modules             | `false`           | ❌       |
+| `watch`             | Show real-time output                    | `false`           | ❌       |
+| `parallel`          | Number of parallel processes (max 4)     | `1`               | ❌       |
+| `default-branch`    | Default git branch for comparisons       | `main`            | ❌       |
+| `solarboat-version` | Solarboat CLI version to use             | `latest`          | ❌       |
+| `terraform-version` | Terraform version to use                 | `latest`          | ❌       |
+| `continue-on-error` | Continue workflow on Solarboat failure   | `false`           | ❌       |
+
+### **Action Outputs:**
+
+| Output            | Description                             |
+| ----------------- | --------------------------------------- |
+| `result`          | Command result (`success` or `failure`) |
+| `plans-path`      | Path to generated Terraform plans       |
+| `changed-modules` | Number of changed modules detected      |
+
+### **Advanced Examples:**
+
+**Conditional workflows based on outputs:**
+
+```yaml
+- name: Plan Infrastructure
+  id: plan
+  uses: devqik/solarboat@v0.8.0
   with:
     command: plan
-    output-dir: terraform-plans
     github_token: ${{ secrets.GITHUB_TOKEN }}
-- name: Apply Infrastructure Changes
-  if: github.ref == 'refs/heads/main'
-  uses: devqik/solarboat@v0.7.6
+
+- name: Notify on Changes
+  if: steps.plan.outputs.changed-modules != '0'
+  run: |
+    echo "🚨 ${{ steps.plan.outputs.changed-modules }} modules changed!"
+    echo "Plans available at: ${{ steps.plan.outputs.plans-path }}"
+```
+
+**Multi-environment with configuration:**
+
+```yaml
+- name: Plan Staging
+  uses: devqik/solarboat@v0.8.0
+  with:
+    command: plan
+    config: ./configs/solarboat.staging.json
+    path: ./environments/staging
+
+- name: Plan Production
+  uses: devqik/solarboat@v0.8.0
+  with:
+    command: plan
+    config: ./configs/solarboat.prod.json
+    path: ./environments/production
+    ignore-workspaces: dev,staging,test
+```
+
+**Error handling:**
+
+```yaml
+- name: Apply with Error Handling
+  uses: devqik/solarboat@v0.8.0
   with:
     command: apply
     apply-dryrun: false
-    github_token: ${{ secrets.GITHUB_TOKEN }}
+    continue-on-error: true
+
+- name: Handle Failures
+  if: failure()
+  run: |
+    echo "🚨 Infrastructure apply failed!"
+    echo "Check logs and retry manually"
 ```
 
-**Action Inputs:**
-| Input | Description | Default |
-|---------------------|----------------------------------------------------|-------------------|
-| `command` | `scan`, `plan`, or `apply` | - |
-| `output-dir` | Directory for plan files | terraform-plans |
-| `apply-dryrun` | Run apply in dry-run mode | true |
-| `ignore-workspaces` | Comma-separated workspaces to ignore | '' |
-| `path` | Directory to scan for modules | . |
-| `all` | Process all stateful modules | false |
-| `watch` | Real-time output | false |
-| `parallel` | Number of parallel processes (max 4) | 1 |
-| `default-branch` | Default git branch | main |
+### **Permissions**
 
-**Examples:**
+For PR comments, ensure your workflow has the correct permissions:
 
-- Plan with workspace filtering:
-  ```yaml
-  - name: Apply Changes
-    uses: devqik/solarboat@v0.7.6
-    with:
-      command: apply
-      ignore-workspaces: dev,staging,test
-      apply-dryrun: true
-  ```
-- Targeted operations:
-  ```yaml
-  - name: Plan Specific Modules
-    # Only run plan when a PR is open
-    if: github.event_name == 'pull_request'
-    uses: devqik/solarboat@v0.7.6
-    with:
-      command: plan
-      path: ./terraform-modules/production
-      output-dir: prod-plans
-  ```
-- Real-time output:
-  ```yaml
-  - name: Plan with Real-time Output
-    # Only run plan when a PR is open
-    if: github.event_name == 'pull_request'
-    uses: devqik/solarboat@v0.7.6
-    with:
-      command: plan
-      watch: true
-      output-dir: terraform-plans
-  ```
+```yaml
+permissions:
+  contents: read # Read repository contents
+  pull-requests: write # Comment on pull requests
+```
+
+**Note**: `${{ secrets.GITHUB_TOKEN }}` is automatically provided by GitHub with repository access. Custom tokens are only needed for cross-repository access or enhanced permissions.
 
 ---
 
