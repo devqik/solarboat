@@ -3,6 +3,7 @@ use crate::commands::scan::helpers;
 use crate::config::ConfigResolver;
 use crate::utils::parallel_processor::ParallelProcessor;
 use crate::utils::terraform_operations::{TerraformOperation, OperationType};
+use crate::utils::display_utils::{format_module_path, format_workspace_list};
 
 #[derive(Debug)]
 pub struct ModuleError {
@@ -41,7 +42,8 @@ pub fn run_terraform_plan(
     
     // Build operations for all modules and workspaces
     for module in modules {
-        println!("\n📦 Queuing module: {}", module);
+        let display_path = format_module_path(module);
+        println!("\n📦 {}", display_path);
         
         let workspaces = get_workspaces(module)?;
         
@@ -49,7 +51,7 @@ pub fn run_terraform_plan(
             // Single workspace (default)
             let default_var_files = config_resolver.get_workspace_var_files(module, "default", var_files);
             if !default_var_files.is_empty() {
-                println!("  📄 Using {} var files for default workspace", default_var_files.len());
+                println!("  📄 Using {} var files", default_var_files.len());
             }
             
             let operation = TerraformOperation {
@@ -64,26 +66,26 @@ pub fn run_terraform_plan(
             processor.add_operation(operation);
         } else {
             // Multiple workspaces
-            println!("  🌐 Found multiple workspaces: {:?}", workspaces);
+            println!("  🌐 Found workspaces: {}", format_workspace_list(&workspaces));
             
             for workspace in workspaces {
                 // Check if workspace should be ignored using config resolver
                 if config_resolver.should_ignore_workspace(module, &workspace, ignore_workspaces) {
                     if workspace == "default" {
-                        println!("  ⏭️  Skipping default workspace (auto-ignored when multiple workspaces exist)");
+                        println!("  ⏭️  Skipping: {} (auto-ignored)", workspace);
                         continue;
                     } else {
-                        println!("  ⏭️  Skipping ignored workspace: {} (from configuration)", workspace);
+                        println!("  ⏭️  Skipping: {} (configured)", workspace);
                         continue;
                     }
                 }
                 
-                println!("  🔄 Queuing workspace: {}", workspace);
+                println!("  🔄 Processing: {}", workspace);
                 
                 // Get workspace-specific var files
                 let workspace_var_files = config_resolver.get_workspace_var_files(module, &workspace, var_files);
                 if !workspace_var_files.is_empty() {
-                    println!("  📄 Using {} var files for workspace {}", workspace_var_files.len(), workspace);
+                    println!("  📄 Using {} var files", workspace_var_files.len());
                 }
                 
                 let operation = TerraformOperation {

@@ -3,11 +3,10 @@ use std::thread;
 use std::time::Duration;
 use std::collections::{VecDeque, HashMap};
 
+use crate::utils::terraform_operations::{TerraformOperation, OperationType, OperationResult};
 use crate::utils::terraform_background::BackgroundTerraform;
-use crate::utils::terraform_operations::{
-    TerraformOperation, OperationResult, OperationType,
-    select_workspace, save_plan_output, run_single_plan, run_single_apply
-};
+use crate::utils::terraform_operations::{save_plan_output, run_single_plan, run_single_apply};
+use crate::utils::display_utils::{format_module_path};
 
 /// Groups operations by module to prevent Terraform state lock conflicts
 #[derive(Debug)]
@@ -155,7 +154,7 @@ impl ParallelProcessor {
         results: Arc<Mutex<Vec<OperationResult>>>,
         active_modules: Arc<Mutex<HashMap<String, bool>>>,
     ) {
-        println!("🔒 Processing module '{}' - all workspaces will be processed sequentially", module_path);
+        let display_path = format_module_path(&module_path);
         
         loop {
             // Get the next operation for this module
@@ -169,8 +168,6 @@ impl ParallelProcessor {
             };
 
             if let Some(op) = operation {
-                println!("  📦 Processing workspace: {:?}", op.workspace.as_deref().unwrap_or("default"));
-                
                 // Process the operation
                 let result = Self::process_operation(&op);
                 
@@ -191,7 +188,7 @@ impl ParallelProcessor {
             active.remove(&module_path);
         }
         
-        println!("✅ Completed all operations for module '{}'", module_path);
+        println!("✅ Completed: {}", display_path);
     }
 
     /// Wait for all operations to complete and return the results.
@@ -219,12 +216,9 @@ impl ParallelProcessor {
         let operation_type = &operation.operation_type;
         let watch = operation.watch;
 
-        println!("📦 Processing module: {} (workspace: {:?})", 
-                module_path, workspace.as_deref().unwrap_or("default"));
-
         // Initialize module if needed
         let init_success = if watch {
-            println!("  🔧 Initializing module in background...");
+            println!("  🔧 Initializing module...");
             let mut background_tf = BackgroundTerraform::new();
             match background_tf.init_background(module_path) {
                 Ok(_) => {
@@ -282,7 +276,7 @@ impl ParallelProcessor {
         // Select workspace if specified
         if let Some(ref workspace_name) = workspace {
             println!("  🔄 Switching to workspace: {}", workspace_name);
-            if let Err(e) = select_workspace(module_path, workspace_name) {
+            if let Err(e) = crate::utils::terraform_operations::select_workspace(module_path, workspace_name) {
                 return OperationResult {
                     module_path: module_path.clone(),
                     workspace: workspace.clone(),
