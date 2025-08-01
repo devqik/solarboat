@@ -32,6 +32,7 @@ fn test_parallel_processor_operation_queuing() {
         var_files: vec![],
         operation_type: OperationType::Plan { plan_dir: None },
         watch: false,
+        skip_init: false,
     });
     
     processor.add_operation(TerraformOperation {
@@ -40,6 +41,7 @@ fn test_parallel_processor_operation_queuing() {
         var_files: vec![],
         operation_type: OperationType::Plan { plan_dir: None },
         watch: false,
+        skip_init: false,
     });
     
     processor.start();
@@ -57,6 +59,7 @@ fn test_parallel_processor_varied_operations() {
         var_files: vec!["vars.tfvars".to_string()],
         operation_type: OperationType::Plan { plan_dir: Some("plans".to_string()) },
         watch: false,
+        skip_init: false,
     });
     
     processor.add_operation(TerraformOperation {
@@ -65,6 +68,7 @@ fn test_parallel_processor_varied_operations() {
         var_files: vec![],
         operation_type: OperationType::Apply,
         watch: false,
+        skip_init: false,
     });
     
     processor.start();
@@ -83,6 +87,7 @@ fn test_parallel_processor_mixed_operation_types() {
         var_files: vec![],
         operation_type: OperationType::Plan { plan_dir: None },
         watch: false,
+        skip_init: false,
     });
     
     processor.add_operation(TerraformOperation {
@@ -91,6 +96,7 @@ fn test_parallel_processor_mixed_operation_types() {
         var_files: vec![],
         operation_type: OperationType::Apply,
         watch: false,
+        skip_init: false,
     });
     
     processor.add_operation(TerraformOperation {
@@ -99,6 +105,7 @@ fn test_parallel_processor_mixed_operation_types() {
         var_files: vec![],
         operation_type: OperationType::Init,
         watch: false,
+        skip_init: false,
     });
     
     processor.start();
@@ -117,6 +124,7 @@ fn test_parallel_processor_workspace_handling() {
         var_files: vec![],
         operation_type: OperationType::Plan { plan_dir: None },
         watch: false,
+        skip_init: false,
     });
     
     processor.add_operation(TerraformOperation {
@@ -125,6 +133,7 @@ fn test_parallel_processor_workspace_handling() {
         var_files: vec![],
         operation_type: OperationType::Plan { plan_dir: None },
         watch: false,
+        skip_init: false,
     });
     
     processor.add_operation(TerraformOperation {
@@ -133,6 +142,7 @@ fn test_parallel_processor_workspace_handling() {
         var_files: vec![],
         operation_type: OperationType::Plan { plan_dir: None },
         watch: false,
+        skip_init: false,
     });
     
     processor.start();
@@ -152,6 +162,7 @@ fn test_parallel_processor_many_operations() {
             var_files: vec![],
             operation_type: OperationType::Plan { plan_dir: None },
             watch: false,
+            skip_init: false,
         });
     }
     
@@ -201,6 +212,7 @@ fn test_module_aware_sequential_processing() {
         var_files: vec![],
         operation_type: OperationType::Plan { plan_dir: None },
         watch: false,
+        skip_init: false,
     });
     
     processor.add_operation(TerraformOperation {
@@ -209,6 +221,7 @@ fn test_module_aware_sequential_processing() {
         var_files: vec![],
         operation_type: OperationType::Plan { plan_dir: None },
         watch: false,
+        skip_init: false,
     });
     
     processor.add_operation(TerraformOperation {
@@ -217,6 +230,7 @@ fn test_module_aware_sequential_processing() {
         var_files: vec![],
         operation_type: OperationType::Plan { plan_dir: None },
         watch: false,
+        skip_init: false,
     });
     
     // Add operations for different modules - these can run in parallel
@@ -226,6 +240,7 @@ fn test_module_aware_sequential_processing() {
         var_files: vec![],
         operation_type: OperationType::Plan { plan_dir: None },
         watch: false,
+        skip_init: false,
     });
     
     processor.add_operation(TerraformOperation {
@@ -234,6 +249,7 @@ fn test_module_aware_sequential_processing() {
         var_files: vec![],
         operation_type: OperationType::Apply,
         watch: false,
+        skip_init: false,
     });
     
     processor.start();
