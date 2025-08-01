@@ -1,8 +1,7 @@
-use std::process::Command;
 use crate::commands::scan::helpers;
 use crate::config::ConfigResolver;
 use crate::utils::parallel_processor::ParallelProcessor;
-use crate::utils::terraform_operations::{TerraformOperation, OperationType};
+use crate::utils::terraform_operations::{TerraformOperation, OperationType, ensure_module_initialized};
 use crate::utils::display_utils::{format_module_path, format_workspace_list};
 
 #[derive(Debug)]
@@ -45,6 +44,9 @@ pub fn run_terraform_plan(
         let display_path = format_module_path(module);
         println!("\n📦 {}", display_path);
         
+        // Ensure module is initialized before trying to list workspaces
+        ensure_module_initialized(module)?;
+        
         let workspaces = get_workspaces(module)?;
         
         if workspaces.len() <= 1 {
@@ -62,6 +64,7 @@ pub fn run_terraform_plan(
                     plan_dir: plan_dir.map(|s| s.to_string()) 
                 },
                 watch,
+                skip_init: true, // Already initialized before workspace listing
             };
             processor.add_operation(operation);
         } else {
@@ -96,6 +99,7 @@ pub fn run_terraform_plan(
                         plan_dir: plan_dir.map(|s| s.to_string()) 
                     },
                     watch,
+                    skip_init: true, // Already initialized before workspace listing
                 };
                 processor.add_operation(operation);
             }
@@ -140,7 +144,7 @@ pub fn run_terraform_plan(
 }
 
 pub fn get_workspaces(module_path: &str) -> Result<Vec<String>, String> {
-    let output = Command::new("terraform")
+    let output = std::process::Command::new("terraform")
         .arg("workspace")
         .arg("list")
         .current_dir(module_path)

@@ -1,7 +1,7 @@
 use crate::commands::scan::helpers;
 use crate::commands::plan::helpers as plan_helpers;
 use crate::utils::parallel_processor::ParallelProcessor;
-use crate::utils::terraform_operations::{TerraformOperation, OperationType};
+use crate::utils::terraform_operations::{TerraformOperation, OperationType, ensure_module_initialized};
 use crate::config::ConfigResolver;
 use crate::utils::display_utils::{format_module_path, format_workspace_list};
 
@@ -49,6 +49,8 @@ pub fn run_terraform_apply(
     for module in modules {
         let display_path = format_module_path(module);
         println!("\n📦 {}", display_path);
+
+        ensure_module_initialized(module)?;
         
         let workspaces = plan_helpers::get_workspaces(module)?;
         
@@ -65,6 +67,7 @@ pub fn run_terraform_apply(
                 var_files: default_var_files,
                 operation_type: OperationType::Apply,
                 watch,
+                skip_init: true, // Already initialized before workspace listing
             };
             processor.add_operation(operation);
         } else {
@@ -97,6 +100,7 @@ pub fn run_terraform_apply(
                     var_files: workspace_var_files,
                     operation_type: OperationType::Apply,
                     watch,
+                    skip_init: true, // Already initialized before workspace listing
                 };
                 processor.add_operation(operation);
             }

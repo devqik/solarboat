@@ -215,9 +215,12 @@ impl ParallelProcessor {
         let var_files = &operation.var_files;
         let operation_type = &operation.operation_type;
         let watch = operation.watch;
+        let skip_init = operation.skip_init;
 
-        // Initialize module if needed
-        let init_success = if watch {
+        // Initialize module if needed and not already done
+        let init_success = if skip_init {
+            true // Skip initialization since it was already done
+        } else if watch {
             println!("  🔧 Initializing module...");
             let mut background_tf = BackgroundTerraform::new();
             match background_tf.init_background(module_path) {
