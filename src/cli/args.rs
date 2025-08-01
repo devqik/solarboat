@@ -5,7 +5,7 @@ use clap::{Parser, Subcommand};
     author, 
     version, 
     about = "A CLI tool for intelligent Terraform operations management",
-    long_about = "Solar Boat is a command-line interface tool designed for Infrastructure as Code (IaC) \
+    long_about = "Solarboat is a command-line interface tool designed for Infrastructure as Code (IaC) \
                   and GitOps workflows. It provides intelligent Terraform operations management with \
                   automatic dependency detection and stateful/stateless module handling."
 )]

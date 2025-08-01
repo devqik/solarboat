@@ -23,8 +23,7 @@ fn print_banner() {
         println!("{}", line.color(colors[i % colors.len()]).bold());
     }
     println!();
-    println!("  {}  {}", "🚤".bold().blue(), "Solarboat CLI".bold().bright_yellow());
-    println!("  {}", "Modern Terraform Automation for DevOps & GitOps".italic().bright_blue());
+    println!("  {}  {}", "🚤".bold().blue(), "Modern Terraform Automation for DevOps & GitOps".italic().bright_blue());
     println!("  {}", "Happy boating ... !!!".italic().bright_green());
     println!("  {}", "https://solarboat.io".italic().bright_purple());
     println!();
