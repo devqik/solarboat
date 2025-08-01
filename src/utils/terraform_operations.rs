@@ -11,6 +11,7 @@ pub struct TerraformOperation {
     pub var_files: Vec<String>,
     pub operation_type: OperationType,
     pub watch: bool,
+    pub skip_init: bool, // Skip initialization if already done
 }
 
 #[derive(Debug, Clone)]
@@ -29,6 +30,25 @@ pub struct OperationResult {
     pub success: bool,
     pub error: Option<String>,
     pub output: Vec<String>,
+}
+
+/// Ensure terraform module is initialized before operations
+pub fn ensure_module_initialized(module_path: &str) -> Result<(), String> {
+    println!("  🔧 Initializing module...");
+    
+    let output = Command::new("terraform")
+        .arg("init")
+        .current_dir(module_path)
+        .output()
+        .map_err(|e| format!("Failed to run terraform init: {}", e))?;
+
+    if !output.status.success() {
+        let error_msg = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Terraform init failed: {}", error_msg));
+    }
+
+    println!("  ✅ Module initialized successfully");
+    Ok(())
 }
 
 /// Select a terraform workspace
