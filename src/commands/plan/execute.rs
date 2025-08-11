@@ -5,6 +5,23 @@ use std::fs;
 use std::path::Path;
 
 pub fn execute(args: PlanArgs, settings: &Settings) -> anyhow::Result<()> {
+    // Parse boolean strings
+    let all = match &args.all {
+        Some(value) => value.parse::<bool>().unwrap_or_else(|_| {
+            eprintln!("Warning: Invalid value for --all: '{}'. Using default (true).", value);
+            true
+        }),
+        None => false, // Flag not provided
+    };
+    
+    let watch = match &args.watch {
+        Some(value) => value.parse::<bool>().unwrap_or_else(|_| {
+            eprintln!("Warning: Invalid value for --watch: '{}'. Using default (true).", value);
+            true
+        }),
+        None => false, // Flag not provided
+    };
+    
     let output_dir = args.output_dir.as_deref().unwrap_or("terraform-plans");
     let output_path = Path::new(output_dir);
 
@@ -15,9 +32,9 @@ pub fn execute(args: PlanArgs, settings: &Settings) -> anyhow::Result<()> {
         fs::create_dir_all(output_dir)?;
     }
 
-    match helpers::get_changed_modules(&args.path, args.all, &args.default_branch) {
+    match helpers::get_changed_modules(&args.path, all, &args.default_branch) {
         Ok(modules) => {
-            if args.all {
+            if all {
                 println!("🔍 Found {} stateful modules", modules.len());
                 println!("📦 All stateful modules will be planned...");
             } else {
@@ -64,7 +81,7 @@ pub fn execute(args: PlanArgs, settings: &Settings) -> anyhow::Result<()> {
             }
             println!("---------------------------------");
 
-            helpers::run_terraform_plan(&filtered_modules, Some(output_dir), args.ignore_workspaces.as_deref(), args.var_files.as_deref(), settings.resolver(), args.watch, args.parallel)
+            helpers::run_terraform_plan(&filtered_modules, Some(output_dir), args.ignore_workspaces.as_deref(), args.var_files.as_deref(), settings.resolver(), watch, args.parallel)
                 .map_err(|e| anyhow::anyhow!("Terraform plan failed: {}", e))?;
         }
         Err(e) => {
