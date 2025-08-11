@@ -5,6 +5,15 @@ use std::collections::HashSet;
 use std::process::Command;
 
 pub fn execute(args: ScanArgs, _settings: &Settings) -> anyhow::Result<()> {
+    // Parse all string as boolean
+    let all = match &args.all {
+        Some(value) => value.parse::<bool>().unwrap_or_else(|_| {
+            eprintln!("Warning: Invalid value for --all: '{}'. Using default (true).", value);
+            true
+        }),
+        None => false, // Flag not provided
+    };
+    
     // Check if the specified path is a git repository
     let git_check = Command::new("git")
         .args(&["rev-parse", "--is-inside-work-tree"])
@@ -14,7 +23,7 @@ pub fn execute(args: ScanArgs, _settings: &Settings) -> anyhow::Result<()> {
     match git_check {
         Ok(output) if output.status.success() => {
             // We're in a git repository, proceed with scanning
-            match helpers::get_changed_modules(&args.path, args.all, &args.default_branch) {
+            match helpers::get_changed_modules(&args.path, all, &args.default_branch) {
                 Ok(modules) => {
                     // Use a HashSet to deduplicate modules based on their names
                     let mut unique_module_names = HashSet::new();
@@ -25,7 +34,7 @@ pub fn execute(args: ScanArgs, _settings: &Settings) -> anyhow::Result<()> {
                         })
                         .collect();
                     
-                    if args.all {
+                    if all {
                         println!("🔍 Found {} stateful modules", unique_modules.len());
                         println!("📦 All stateful modules will be scanned...");
                     } else {

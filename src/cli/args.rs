@@ -21,11 +21,13 @@ pub struct Args {
 
     #[clap(
         long,
+        num_args = 0..=1,
+        value_name = "BOOL",
         help = "Disable configuration file loading",
         long_help = "When enabled, this flag will disable loading of configuration files \
-                    and use only CLI arguments and defaults."
+                    and use only CLI arguments and defaults. Use --no-config=false to enable config loading."
     )]
-    pub no_config: bool,
+    pub no_config: Option<String>,
 
     #[command(subcommand)]
     pub command: Commands,
@@ -70,11 +72,14 @@ pub struct ScanArgs {
 
     #[clap(
         long,
+        num_args = 0..=1,
+        value_name = "BOOL",
         help = "Process all stateful modules regardless of changes",
         long_help = "When enabled, this flag will process all stateful modules \
-                    in the specified directory, regardless of whether they have been changed."
+                    in the specified directory, regardless of whether they have been changed. \
+                    Use --all=false to process only changed modules."
     )]
-    pub all: bool,
+    pub all: Option<String>,
 
     #[clap(
         long,
@@ -120,11 +125,14 @@ pub struct PlanArgs {
 
     #[clap(
         long,
+        num_args = 0..=1,
+        value_name = "BOOL",
         help = "Process all stateful modules regardless of changes",
         long_help = "When enabled, this flag will process all stateful modules \
-                    in the specified directory, regardless of whether they have been changed."
+                    in the specified directory, regardless of whether they have been changed. \
+                    Use --all=false to process only changed modules."
     )]
-    pub all: bool,
+    pub all: Option<String>,
 
     #[clap(
         long,
@@ -137,12 +145,15 @@ pub struct PlanArgs {
 
     #[clap(
         long,
+        num_args = 0..=1,
+        value_name = "BOOL",
         help = "Watch background Terraform operations and display real-time status",
         long_help = "When enabled, Terraform operations will run in the background \
                     and this CLI will display real-time status updates. \
-                    Without this flag, Terraform output is hidden until completion."
+                    Without this flag, Terraform output is hidden until completion. \
+                    Use --watch=false to hide real-time output."
     )]
-    pub watch: bool,
+    pub watch: Option<String>,
 
     /// Number of modules to process in parallel (max 4). Default is 1. This value is clamped to prevent system overload.
     #[clap(
@@ -180,11 +191,13 @@ pub struct ApplyArgs {
     #[clap(
         long,
         default_value = "true",
+        value_name = "BOOL",
         help = "Run in dry-run mode (no changes will be applied)",
         long_help = "When enabled (default), this flag will run the apply command in dry-run mode, \
-                    showing what changes would be made without actually applying them."
+                    showing what changes would be made without actually applying them. \
+                    Use --dry-run=false to apply actual changes."
     )]
-    pub dry_run: bool,
+    pub dry_run: String,
 
     #[clap(
         long,
@@ -198,11 +211,14 @@ pub struct ApplyArgs {
 
     #[clap(
         long,
+        num_args = 0..=1,
+        value_name = "BOOL",
         help = "Process all stateful modules regardless of changes",
         long_help = "When enabled, this flag will process all stateful modules \
-                    in the specified directory, regardless of whether they have been changed."
+                    in the specified directory, regardless of whether they have been changed. \
+                    Use --all=false to process only changed modules."
     )]
-    pub all: bool,
+    pub all: Option<String>,
 
     #[clap(
         long,
@@ -215,12 +231,15 @@ pub struct ApplyArgs {
 
     #[clap(
         long,
+        num_args = 0..=1,
+        value_name = "BOOL",
         help = "Watch background Terraform operations and display real-time status",
         long_help = "When enabled, Terraform operations will run in the background \
                     and this CLI will display real-time status updates. \
-                    Without this flag, Terraform output is hidden until completion."
+                    Without this flag, Terraform output is hidden until completion. \
+                    Use --watch=false to hide real-time output."
     )]
-    pub watch: bool,
+    pub watch: Option<String>,
 
     /// Number of modules to process in parallel (max 4). Default is 1. This value is clamped to prevent system overload.
     #[clap(

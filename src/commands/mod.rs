@@ -8,8 +8,16 @@ use anyhow::Result;
 use std::path::PathBuf;
 
 pub fn handle_command(args: Args) -> Result<()> {
+    let no_config = match &args.no_config {
+        Some(value) => value.parse::<bool>().unwrap_or_else(|_| {
+            eprintln!("Warning: Invalid value for --no-config: '{}'. Using default (true).", value);
+            true
+        }),
+        None => false, // Flag not provided
+    };
+    
     // Load configuration based on CLI arguments
-    let settings = if args.no_config {
+    let settings = if no_config {
         // Use default settings when config is disabled
         Settings {
             config_resolver: crate::config::ConfigResolver::new(None, PathBuf::from(".")),

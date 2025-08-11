@@ -5,15 +5,37 @@ use std::io;
 
 pub fn execute(args: ApplyArgs, settings: &Settings) -> anyhow::Result<()> {
     println!("🚀 Starting Terraform apply...");
-    if args.dry_run {
+    
+    let dry_run = args.dry_run.parse::<bool>().unwrap_or_else(|_| {
+        eprintln!("Warning: Invalid value for --dry-run: '{}'. Using default (true).", args.dry_run);
+        true
+    });
+    
+    let all = match &args.all {
+        Some(value) => value.parse::<bool>().unwrap_or_else(|_| {
+            eprintln!("Warning: Invalid value for --all: '{}'. Using default (true).", value);
+            true
+        }),
+        None => false,
+    };
+    
+    let watch = match &args.watch {
+        Some(value) => value.parse::<bool>().unwrap_or_else(|_| {
+            eprintln!("Warning: Invalid value for --watch: '{}'. Using default (true).", value);
+            true
+        }),
+        None => false, // Flag not provided
+    };
+    
+    if dry_run {
         println!("🔍 Running in dry-run mode (default) - no changes will be applied");
     } else {
         println!("⚠️  Running in APPLY mode - changes will be applied!");
     }
 
-    match helpers::get_changed_modules(&args.path, args.all, &args.default_branch) {
+    match helpers::get_changed_modules(&args.path, all, &args.default_branch) {
         Ok(modules) => {
-            if args.all {
+            if all {
                 println!("🔍 Found {} stateful modules", modules.len());
                 println!("📦 All stateful modules will be applied...");
             } else {
@@ -60,7 +82,7 @@ pub fn execute(args: ApplyArgs, settings: &Settings) -> anyhow::Result<()> {
             }
             println!("---------------------------------");
 
-            if !args.dry_run {
+            if !dry_run {
                 println!("\n⚠️  You are about to apply changes to the above modules.");
                 println!("Do you want to continue? [y/N]");
                 
@@ -73,10 +95,10 @@ pub fn execute(args: ApplyArgs, settings: &Settings) -> anyhow::Result<()> {
                 }
             }
 
-            helpers::run_terraform_apply(&filtered_modules, args.dry_run, args.ignore_workspaces.as_deref(), args.var_files.as_deref(), settings.resolver(), args.watch, args.parallel)
+            helpers::run_terraform_apply(&filtered_modules, dry_run, args.ignore_workspaces.as_deref(), args.var_files.as_deref(), settings.resolver(), watch, args.parallel)
                 .map_err(|e| anyhow::anyhow!("Terraform apply failed: {}", e))?;
             
-            if args.dry_run {
+            if dry_run {
                 println!("\n🔍 Dry run completed - no changes were applied");
             } else {
                 println!("\n✅ Changes applied successfully!");

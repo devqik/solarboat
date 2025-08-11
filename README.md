@@ -48,7 +48,7 @@ Inspired by the Ancient Egyptian solar boats that carried Pharaohs through their
 ```bash
 cargo install solarboat
 # Or install a specific version
-cargo install solarboat --version 0.8.3
+cargo install solarboat --version 0.8.4
 ```
 
 **From Release Binaries:**
@@ -73,23 +73,47 @@ cargo build
 ### Common Commands
 
 ```bash
-# Scan for changed Terraform modules	solarboat scan
-# Scan a specific directory		solarboat scan --path ./terraform-modules
-# Scan with custom default branch	solarboat scan --default-branch develop
+# Scan for changed Terraform modules
+solarboat scan
 
-# Plan Terraform changes		solarboat plan
-# Plan in parallel			solarboat plan --parallel 4
-# Save plans to directory		solarboat plan --output-dir ./terraform-plans
-# Ignore workspaces			solarboat plan --ignore-workspaces dev,staging
-# Plan all stateful modules		solarboat plan --all
+# Scan a specific directory
+solarboat scan --path ./terraform-modules
 
-# Apply changes (dry-run by default)	solarboat apply
-# Apply for real			solarboat apply --dry-run=false
-# Ignore workspaces			solarboat apply --ignore-workspaces prod,staging
-# Apply all stateful modules		solarboat apply --all
+# Scan with custom default branch
+solarboat scan --default-branch develop
 
-# Real-time output			solarboat plan --watch
-# Combine flags			        solarboat plan --all --watch --var-files vars.tfvars
+# Plan Terraform changes
+solarboat plan
+
+# Plan in parallel
+solarboat plan --parallel 4
+
+# Save plans to directory
+solarboat plan --output-dir ./terraform-plans
+
+# Ignore workspaces
+solarboat plan --ignore-workspaces dev,staging
+
+# Plan all stateful modules
+solarboat plan --all
+
+# Apply changes (dry-run by default)
+solarboat apply
+
+# Apply for real
+solarboat apply --dry-run=false
+
+# Ignore workspaces
+solarboat apply --ignore-workspaces prod,staging
+
+# Apply all stateful modules
+solarboat apply --all
+
+# Real-time output
+solarboat plan --watch
+
+# Combine flags
+solarboat plan --all --watch --var-files vars.tfvars
 ```
 
 ### Command Overview
@@ -133,13 +157,17 @@ Solarboat supports flexible configuration via JSON files.
   "global": {
     "ignore_workspaces": ["dev", "test"],
     "var_files": ["global.tfvars"],
-    "workspace_var_files": { "prod": ["prod.tfvars"] }
+    "workspace_var_files": {
+      "prod": ["prod.tfvars"]
+    }
   },
   "modules": {
     "infrastructure/networking": {
       "ignore_workspaces": ["test"],
       "var_files": ["networking.tfvars"],
-      "workspace_var_files": { "prod": ["networking-prod.tfvars"] }
+      "workspace_var_files": {
+        "prod": ["networking-prod.tfvars"]
+      }
     }
   }
 }
@@ -194,16 +222,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
+        with:
+          fetch-depth: 0
 
       - name: Scan for Changes
-        uses: devqik/solarboat@v0.8.3
+        uses: devqik/solarboat@v0.8.4
         with:
           command: scan
 
       - name: Plan Infrastructure
         if: github.event_name == 'pull_request'
-        uses: devqik/solarboat@v0.8.3
+        uses: devqik/solarboat@v0.8.4
         with:
           command: plan
           output-dir: terraform-plans
@@ -212,7 +241,7 @@ jobs:
 
       - name: Apply Changes
         if: github.ref == 'refs/heads/main'
-        uses: devqik/solarboat@v0.8.3
+        uses: devqik/solarboat@v0.8.4
         with:
           command: apply
           apply-dryrun: false
@@ -237,16 +266,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
+        with:
+          fetch-depth: 0
 
       - name: Plan Infrastructure Changes
         if: github.event_name == 'pull_request'
-        uses: devqik/solarboat@v0.8.3
+        uses: devqik/solarboat@v0.8.4
         with:
           command: plan
           config: ./infrastructure/solarboat.json
           terraform-version: "1.8.0"
-          solarboat-version: "v0.8.3"
+          solarboat-version: "v0.8.4"
           parallel: 3
           ignore-workspaces: dev,test
           output-dir: terraform-plans
@@ -254,7 +284,7 @@ jobs:
 
       - name: Apply Infrastructure Changes
         if: github.ref == 'refs/heads/main'
-        uses: devqik/solarboat@v0.8.3
+        uses: devqik/solarboat@v0.8.4
         with:
           command: apply
           apply-dryrun: false
@@ -299,7 +329,7 @@ jobs:
 ```yaml
 - name: Plan Infrastructure
   id: plan
-  uses: devqik/solarboat@v0.8.3
+  uses: devqik/solarboat@v0.8.4
   with:
     command: plan
     github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -315,14 +345,14 @@ jobs:
 
 ```yaml
 - name: Plan Staging
-  uses: devqik/solarboat@v0.8.3
+  uses: devqik/solarboat@v0.8.4
   with:
     command: plan
     config: ./configs/solarboat.staging.json
     path: ./environments/staging
 
 - name: Plan Production
-  uses: devqik/solarboat@v0.8.3
+  uses: devqik/solarboat@v0.8.4
   with:
     command: plan
     config: ./configs/solarboat.prod.json
@@ -334,7 +364,7 @@ jobs:
 
 ```yaml
 - name: Apply with Error Handling
-  uses: devqik/solarboat@v0.8.3
+  uses: devqik/solarboat@v0.8.4
   with:
     command: apply
     apply-dryrun: false
