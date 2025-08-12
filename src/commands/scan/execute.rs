@@ -1,6 +1,6 @@
 use crate::cli::ScanArgs;
 use crate::config::Settings;
-use super::helpers;
+use crate::utils::scan_utils;
 use std::collections::HashSet;
 use std::process::Command;
 
@@ -13,7 +13,7 @@ pub fn execute(args: ScanArgs, _settings: &Settings) -> anyhow::Result<()> {
         }),
         None => false, // Flag not provided
     };
-    
+
     // Check if the specified path is a git repository
     let git_check = Command::new("git")
         .args(&["rev-parse", "--is-inside-work-tree"])
@@ -23,7 +23,7 @@ pub fn execute(args: ScanArgs, _settings: &Settings) -> anyhow::Result<()> {
     match git_check {
         Ok(output) if output.status.success() => {
             // We're in a git repository, proceed with scanning
-            match helpers::get_changed_modules(&args.path, all, &args.default_branch) {
+            match scan_utils::get_changed_modules(&args.path, all, &args.default_branch) {
                 Ok(modules) => {
                     // Use a HashSet to deduplicate modules based on their names
                     let mut unique_module_names = HashSet::new();

@@ -1,4 +1,4 @@
-use crate::commands::scan::helpers;
+use crate::utils::scan_utils;
 use crate::config::ConfigResolver;
 use crate::utils::parallel_processor::ParallelProcessor;
 use crate::utils::terraform_operations::{TerraformOperation, OperationType, ensure_module_initialized};
@@ -12,8 +12,7 @@ pub struct ModuleError {
 }
 
 pub fn get_changed_modules(root_dir: &str, force: bool, default_branch: &str) -> Result<Vec<String>, String> {
-    // Use the scan helpers' get_changed_modules function directly
-    helpers::get_changed_modules(root_dir, force, default_branch)
+    scan_utils::get_changed_modules(root_dir, force, default_branch)
 }
 
 pub fn run_terraform_plan(

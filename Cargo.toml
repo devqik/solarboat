@@ -1,6 +1,6 @@
 [package]
 name = "solarboat"
-version = "0.8.4"
+version = "0.8.5"
 edition = "2021"
 description = "A CLI tool for intelligent Terraform operations management with automatic dependency detection"
 license = "BSD-3-Clause"

@@ -27,10 +27,28 @@ pub fn get_changed_modules(root_dir: &str, all: bool, default_branch: &str) -> R
         return Ok(stateful_modules);
     }
 
-    // Always get git changes from the root directory
-    let changed_files = get_git_changed_files(".", default_branch)?;
+    // Check if we're on the main branch and handle accordingly
+    let current_branch = get_current_branch(root_dir)?;
+    let is_on_main = current_branch == default_branch;
     
-    // Process the changed files to get affected modules
+    if is_on_main {
+        println!("🔍 Currently on {} branch - using enhanced change detection", current_branch);
+        let changed_files = get_main_branch_changes(root_dir)?;
+        let affected_modules = process_changed_modules(&changed_files, &mut modules)?;
+        
+        // If no changes detected on main, provide helpful message
+        if affected_modules.is_empty() {
+            println!("ℹ️  No changes detected on main branch. This could mean:");
+            println!("   • No recent commits with .tf changes");
+            println!("   • Changes were already applied");
+            println!("   • Use --all flag to process all modules");
+        }
+        
+        return Ok(affected_modules);
+    }
+
+    // Regular change detection for non-main branches
+    let changed_files = get_git_changed_files(".", default_branch)?;
     let affected_modules = process_changed_modules(&changed_files, &mut modules)?;
 
     // If root_dir is not ".", filter modules based on the root_dir path
@@ -237,6 +255,222 @@ pub fn has_backend_config(tf_files: &[fs::DirEntry]) -> bool {
     
     // If we didn't find module blocks, backend blocks, or state files, this is a stateless module
     false
+}
+
+/// Get the current branch name
+fn get_current_branch(root_dir: &str) -> Result<String, String> {
+    // Try to get from environment first (for CI/CD)
+    if let Ok(branch) = std::env::var("GITHUB_REF_NAME") {
+        return Ok(branch);
+    }
+    
+    // Fallback to git command
+    let output = Command::new("git")
+        .args(&["rev-parse", "--abbrev-ref", "HEAD"])
+        .current_dir(root_dir)
+        .output()
+        .map_err(|e| e.to_string())?;
+        
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    } else {
+        Err("Failed to get current branch".to_string())
+    }
+}
+
+/// Get changes specifically for main branch scenarios
+fn get_main_branch_changes(root_dir: &str) -> Result<Vec<String>, String> {
+    // Strategy 1: Check recent commits (last 5 commits)
+    let recent_changes = get_recent_commit_changes(root_dir, 5)?;
+    if !recent_changes.is_empty() {
+        println!("🔍 Found changes in recent commits");
+        return Ok(recent_changes);
+    }
+    
+    // Strategy 2: Check if there are any staged or unstaged changes
+    let uncommitted_changes = get_uncommitted_changes(root_dir)?;
+    if !uncommitted_changes.is_empty() {
+        println!("🔍 Found uncommitted changes");
+        return Ok(uncommitted_changes);
+    }
+    
+    // Strategy 3: Compare with a reference point (e.g., last tag or specific commit)
+    let reference_changes = get_reference_changes(root_dir)?;
+    if !reference_changes.is_empty() {
+        println!("🔍 Found changes compared to reference point");
+        return Ok(reference_changes);
+    }
+    
+    println!("🔍 No changes detected using any strategy");
+    Ok(Vec::new())
+}
+
+/// Get changes from recent commits
+fn get_recent_commit_changes(root_dir: &str, commit_count: usize) -> Result<Vec<String>, String> {
+    let mut changed_files = Vec::new();
+    
+    // Get the last N commits
+    let log_output = Command::new("git")
+        .args(&["log", "--oneline", "-n", &commit_count.to_string()])
+        .current_dir(root_dir)
+        .output()
+        .map_err(|e| e.to_string())?;
+        
+    if !log_output.status.success() {
+        return Ok(Vec::new());
+    }
+    
+    let log_output_str = String::from_utf8_lossy(&log_output.stdout);
+    let commits: Vec<&str> = log_output_str
+        .lines()
+        .filter_map(|line| line.split_whitespace().next())
+        .collect();
+    
+    // Check changes in each commit
+    for commit in commits {
+        let changes = get_changes_between_commits(root_dir, &format!("{}~1", commit), commit)?;
+        changed_files.extend(changes);
+    }
+    
+    // Remove duplicates
+    changed_files.sort();
+    changed_files.dedup();
+    
+    Ok(changed_files)
+}
+
+/// Get uncommitted changes (staged and unstaged)
+fn get_uncommitted_changes(root_dir: &str) -> Result<Vec<String>, String> {
+    let mut changed_files = Vec::new();
+    
+    // Get staged changes
+    let staged_output = Command::new("git")
+        .args(&["diff", "--cached", "--name-only"])
+        .current_dir(root_dir)
+        .output()
+        .map_err(|e| e.to_string())?;
+        
+    if staged_output.status.success() {
+        changed_files.extend(
+            String::from_utf8_lossy(&staged_output.stdout)
+                .lines()
+                .filter(|line| line.ends_with(".tf"))
+                .map(|line| Path::new(root_dir).join(line).to_string_lossy().to_string())
+        );
+    }
+    
+    // Get unstaged changes
+    let unstaged_output = Command::new("git")
+        .args(&["diff", "--name-only"])
+        .current_dir(root_dir)
+        .output()
+        .map_err(|e| e.to_string())?;
+        
+    if unstaged_output.status.success() {
+        changed_files.extend(
+            String::from_utf8_lossy(&unstaged_output.stdout)
+                .lines()
+                .filter(|line| line.ends_with(".tf"))
+                .map(|line| Path::new(root_dir).join(line).to_string_lossy().to_string())
+        );
+    }
+    
+    // Remove duplicates
+    changed_files.sort();
+    changed_files.dedup();
+    
+    Ok(changed_files)
+}
+
+/// Get changes compared to a reference point (last tag or specific commit)
+fn get_reference_changes(root_dir: &str) -> Result<Vec<String>, String> {
+    // Try to find the last tag
+    let tag_output = Command::new("git")
+        .args(&["describe", "--tags", "--abbrev=0"])
+        .current_dir(root_dir)
+        .output();
+        
+    if let Ok(output) = tag_output {
+        if output.status.success() {
+            let tag = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            println!("🔍 Comparing with last tag: {}", tag);
+            return get_changes_between_commits(root_dir, &tag, "HEAD");
+        }
+    }
+    
+    // Fallback: compare with a commit from 1 day ago
+    let date_output = Command::new("git")
+        .args(&["rev-list", "-n", "1", "--before=1 day ago", "HEAD"])
+        .current_dir(root_dir)
+        .output()
+        .map_err(|e| e.to_string())?;
+        
+    if date_output.status.success() {
+        let commit = String::from_utf8_lossy(&date_output.stdout).trim().to_string();
+        if !commit.is_empty() {
+            println!("🔍 Comparing with commit from 1 day ago: {}", commit);
+            return get_changes_between_commits(root_dir, &commit, "HEAD");
+        }
+    }
+    
+    Ok(Vec::new())
+}
+
+/// Get changes between two specific commits
+fn get_changes_between_commits(root_dir: &str, from_commit: &str, to_commit: &str) -> Result<Vec<String>, String> {
+    let mut changed_files = Vec::new();
+
+    println!("🔍 Getting changes between {} and {}", from_commit, to_commit);
+    
+    // Get changes between the two commits
+    let diff_output = Command::new("git")
+        .args(&["diff", "--name-only", from_commit, to_commit])
+        .current_dir(root_dir)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if diff_output.status.success() {
+        changed_files.extend(
+            String::from_utf8_lossy(&diff_output.stdout)
+                .lines()
+                .filter(|line| line.ends_with(".tf"))
+                .map(|line| {
+                    // Use a more robust approach to handle paths that might not exist
+                    let file_path = Path::new(root_dir).join(line);
+                    if file_path.exists() {
+                        // If the file exists, canonicalize it
+                        fs::canonicalize(file_path)
+                            .map_err(|e| e.to_string())
+                            .unwrap()
+                            .to_str()
+                            .unwrap()
+                            .to_string()
+                    } else {
+                        // If the file doesn't exist, use the absolute path from the current directory
+                        let current_dir = std::env::current_dir().map_err(|e| e.to_string()).unwrap();
+                        current_dir.join(root_dir).join(line)
+                            .to_str()
+                            .unwrap()
+                            .to_string()
+                    }
+                })
+        );
+    }
+
+    // Remove duplicates
+    changed_files.sort();
+    changed_files.dedup();
+
+    if !changed_files.is_empty() {
+        println!("🔍 Found {} changed .tf files:", changed_files.len());
+        for file in &changed_files {
+            println!("   • {}", file);
+        }
+    } else {
+        println!("🔍 No .tf files changed between the commits");
+    }
+
+    Ok(changed_files)
 }
 
 pub fn get_git_changed_files(root_dir: &str, default_branch: &str) -> Result<Vec<String>, String> {
