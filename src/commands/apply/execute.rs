@@ -24,9 +24,9 @@ pub fn execute(args: ApplyArgs, settings: &Settings) -> anyhow::Result<()> {
             eprintln!("Warning: Invalid value for --watch: '{}'. Using default (true).", value);
             true
         }),
-        None => false, // Flag not provided
+        None => false,
     };
-    
+
     if dry_run {
         println!("🔍 Running in dry-run mode (default) - no changes will be applied");
     } else {

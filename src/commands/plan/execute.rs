@@ -11,7 +11,7 @@ pub fn execute(args: PlanArgs, settings: &Settings) -> anyhow::Result<()> {
             eprintln!("Warning: Invalid value for --all: '{}'. Using default (true).", value);
             true
         }),
-        None => false, // Flag not provided
+        None => false,
     };
     
     let watch = match &args.watch {
@@ -19,9 +19,9 @@ pub fn execute(args: PlanArgs, settings: &Settings) -> anyhow::Result<()> {
             eprintln!("Warning: Invalid value for --watch: '{}'. Using default (true).", value);
             true
         }),
-        None => false, // Flag not provided
+        None => false,
     };
-    
+
     let output_dir = args.output_dir.as_deref().unwrap_or("terraform-plans");
     let output_path = Path::new(output_dir);
 

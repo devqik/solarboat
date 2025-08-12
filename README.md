@@ -48,7 +48,7 @@ Inspired by the Ancient Egyptian solar boats that carried Pharaohs through their
 ```bash
 cargo install solarboat
 # Or install a specific version
-cargo install solarboat --version 0.8.4
+cargo install solarboat --version 0.8.5
 ```
 
 **From Release Binaries:**
@@ -226,13 +226,13 @@ jobs:
           fetch-depth: 0
 
       - name: Scan for Changes
-        uses: devqik/solarboat@v0.8.4
+        uses: devqik/solarboat@v0.8.5
         with:
           command: scan
 
       - name: Plan Infrastructure
         if: github.event_name == 'pull_request'
-        uses: devqik/solarboat@v0.8.4
+        uses: devqik/solarboat@v0.8.5
         with:
           command: plan
           output-dir: terraform-plans
@@ -241,7 +241,7 @@ jobs:
 
       - name: Apply Changes
         if: github.ref == 'refs/heads/main'
-        uses: devqik/solarboat@v0.8.4
+        uses: devqik/solarboat@v0.8.5
         with:
           command: apply
           apply-dryrun: false
@@ -271,12 +271,12 @@ jobs:
 
       - name: Plan Infrastructure Changes
         if: github.event_name == 'pull_request'
-        uses: devqik/solarboat@v0.8.4
+        uses: devqik/solarboat@v0.8.5
         with:
           command: plan
           config: ./infrastructure/solarboat.json
           terraform-version: "1.8.0"
-          solarboat-version: "v0.8.4"
+          solarboat-version: "v0.8.5"
           parallel: 3
           ignore-workspaces: dev,test
           output-dir: terraform-plans
@@ -284,7 +284,7 @@ jobs:
 
       - name: Apply Infrastructure Changes
         if: github.ref == 'refs/heads/main'
-        uses: devqik/solarboat@v0.8.4
+        uses: devqik/solarboat@v0.8.5
         with:
           command: apply
           apply-dryrun: false
@@ -329,7 +329,7 @@ jobs:
 ```yaml
 - name: Plan Infrastructure
   id: plan
-  uses: devqik/solarboat@v0.8.4
+  uses: devqik/solarboat@v0.8.5
   with:
     command: plan
     github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -345,14 +345,14 @@ jobs:
 
 ```yaml
 - name: Plan Staging
-  uses: devqik/solarboat@v0.8.4
+  uses: devqik/solarboat@v0.8.5
   with:
     command: plan
     config: ./configs/solarboat.staging.json
     path: ./environments/staging
 
 - name: Plan Production
-  uses: devqik/solarboat@v0.8.4
+  uses: devqik/solarboat@v0.8.5
   with:
     command: plan
     config: ./configs/solarboat.prod.json
@@ -364,7 +364,7 @@ jobs:
 
 ```yaml
 - name: Apply with Error Handling
-  uses: devqik/solarboat@v0.8.4
+  uses: devqik/solarboat@v0.8.5
   with:
     command: apply
     apply-dryrun: false
