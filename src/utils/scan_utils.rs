@@ -10,7 +10,7 @@ pub struct Module {
     is_stateful: bool,
 }
 
-pub fn get_changed_modules(root_dir: &str, all: bool, default_branch: &str) -> Result<Vec<String>, String> {
+pub fn get_changed_modules(root_dir: &str, all: bool, default_branch: &str, recent_commits: u32) -> Result<Vec<String>, String> {
     let mut modules = HashMap::new();
 
     // Always discover modules from the root directory
@@ -33,7 +33,25 @@ pub fn get_changed_modules(root_dir: &str, all: bool, default_branch: &str) -> R
     
     if is_on_main {
         println!("🔍 Currently on {} branch - using enhanced change detection", current_branch);
-        let changed_files = get_main_branch_changes(root_dir)?;
+        
+        // Check if we're running in a CD pipeline (Atlantis-inspired approach)
+        if let Ok(pr_number) = std::env::var("SOLARBOAT_PR_NUMBER") {
+            if !pr_number.is_empty() {
+                println!("🚀 Detected CD pipeline environment (SOLARBOAT_PR_NUMBER={})", pr_number);
+                let changed_files = get_cd_pipeline_changes(root_dir, &pr_number, default_branch)?;
+                let affected_modules = process_changed_modules(&changed_files, &mut modules)?;
+                
+                if affected_modules.is_empty() {
+                    println!("ℹ️  No changes detected in PR #{}", pr_number);
+                }
+                
+                return Ok(affected_modules);
+            }
+        }
+        
+        // Local environment - use recent commits approach
+        println!("💻 Running in local environment - checking last {} commits", recent_commits);
+        let changed_files = get_main_branch_changes_local(root_dir, recent_commits)?;
         let affected_modules = process_changed_modules(&changed_files, &mut modules)?;
         
         // If no changes detected on main, provide helpful message
@@ -278,10 +296,10 @@ fn get_current_branch(root_dir: &str) -> Result<String, String> {
     }
 }
 
-/// Get changes specifically for main branch scenarios
-fn get_main_branch_changes(root_dir: &str) -> Result<Vec<String>, String> {
-    // Strategy 1: Check recent commits (last 5 commits)
-    let recent_changes = get_recent_commit_changes(root_dir, 5)?;
+/// Get changes specifically for main branch scenarios (local environment)
+fn get_main_branch_changes_local(root_dir: &str, recent_commits: u32) -> Result<Vec<String>, String> {
+    // Strategy 1: Check recent commits (configurable count)
+    let recent_changes = get_recent_commit_changes(root_dir, recent_commits as usize)?;
     if !recent_changes.is_empty() {
         println!("🔍 Found changes in recent commits");
         return Ok(recent_changes);
@@ -302,6 +320,126 @@ fn get_main_branch_changes(root_dir: &str) -> Result<Vec<String>, String> {
     }
     
     println!("🔍 No changes detected using any strategy");
+    Ok(Vec::new())
+}
+
+/// Get changes for CD pipeline environment (Pipeline-supplied commits)
+fn get_cd_pipeline_changes(root_dir: &str, pr_number: &str, default_branch: &str) -> Result<Vec<String>, String> {
+    println!("🔍 Analyzing changes for PR #{} against {}", pr_number, default_branch);
+    
+    // Strategy 1: Use pipeline-supplied commit information (PRIORITY)
+    let pipeline_changes = get_pipeline_supplied_changes(root_dir, pr_number);
+    match pipeline_changes {
+        Ok(changes) if !changes.is_empty() => {
+            println!("🔍 Found changes using pipeline-supplied commits");
+            return Ok(changes);
+        }
+        Ok(_) => {
+            println!("🔍 Pipeline-supplied commits found but no changes detected");
+            return Ok(Vec::new());
+        }
+        Err(_) => {
+            println!("ℹ️  No pipeline-supplied commits available, using fallback strategies");
+        }
+    }
+    
+    // Strategy 2: Fallback to merge base detection (legacy)
+    if let Ok(changes) = get_pr_changes(root_dir, pr_number, default_branch) {
+        if !changes.is_empty() {
+            println!("🔍 Found changes using merge base detection (fallback)");
+            return Ok(changes);
+        }
+    }
+    
+    // Strategy 3: Fallback to recent commits in the PR
+    let recent_changes = get_recent_commit_changes(root_dir, 10)?;
+    if !recent_changes.is_empty() {
+        println!("🔍 Found changes in recent commits (fallback)");
+        return Ok(recent_changes);
+    }
+    
+    // Strategy 4: Check for uncommitted changes
+    let uncommitted_changes = get_uncommitted_changes(root_dir)?;
+    if !uncommitted_changes.is_empty() {
+        println!("🔍 Found uncommitted changes");
+        return Ok(uncommitted_changes);
+    }
+    
+    println!("🔍 No changes detected for PR #{}", pr_number);
+    Ok(Vec::new())
+}
+
+/// Get changes using pipeline-supplied commit information
+fn get_pipeline_supplied_changes(root_dir: &str, _pr_number: &str) -> Result<Vec<String>, String> {
+    // Check for pipeline-supplied commit information
+    let base_commit = std::env::var("SOLARBOAT_BASE_COMMIT").ok();
+    let head_commit = std::env::var("SOLARBOAT_HEAD_COMMIT").ok();
+    let base_branch = std::env::var("SOLARBOAT_BASE_BRANCH").ok();
+    let head_branch = std::env::var("SOLARBOAT_HEAD_BRANCH").ok();
+    
+    // If we have both base and head commits, use them directly
+    if let (Some(base), Some(head)) = (base_commit.clone(), head_commit.clone()) {
+        println!("🔍 Using pipeline-supplied commits:");
+        println!("   • Base commit: {}", base);
+        println!("   • Head commit: {}", head);
+        if let Some(base_branch) = base_branch.clone() {
+            println!("   • Base branch: {}", base_branch);
+        }
+        if let Some(head_branch) = head_branch.clone() {
+            println!("   • Head branch: {}", head_branch);
+        }
+        
+        return get_changes_between_commits(root_dir, &base, &head);
+    }
+    
+    // If we only have base commit, compare with HEAD
+    if let Some(base) = base_commit {
+        println!("🔍 Using pipeline-supplied base commit: {}", base);
+        return get_changes_between_commits(root_dir, &base, "HEAD");
+    }
+    
+    // If we only have head commit, compare with default branch
+    if let Some(head) = head_commit {
+        println!("🔍 Using pipeline-supplied head commit: {}", head);
+        // This is less ideal, but we can compare with the default branch
+        return get_changes_between_commits(root_dir, "main", &head);
+    }
+    
+    // No pipeline-supplied commits available
+    println!("ℹ️  No pipeline-supplied commits found, falling back to merge base detection");
+    Ok(Vec::new()) // Return empty list instead of error
+}
+
+/// Get changes between PR branch and default branch
+fn get_pr_changes(root_dir: &str, pr_number: &str, default_branch: &str) -> Result<Vec<String>, String> {
+    // Try to get the merge base between the current branch and the default branch
+    let merge_base_output = Command::new("git")
+        .args(&["merge-base", default_branch, "HEAD"])
+        .current_dir(root_dir)
+        .output()
+        .map_err(|e| e.to_string())?;
+    
+    if merge_base_output.status.success() {
+        let merge_base = String::from_utf8_lossy(&merge_base_output.stdout).trim().to_string();
+        println!("🔍 Using merge base: {}", merge_base);
+        return get_changes_between_commits(root_dir, &merge_base, "HEAD");
+    }
+    
+    // Fallback: try to get changes between origin/default_branch and HEAD
+    let origin_merge_base_output = Command::new("git")
+        .args(&["merge-base", &format!("origin/{}", default_branch), "HEAD"])
+        .current_dir(root_dir)
+        .output()
+        .map_err(|e| e.to_string())?;
+    
+    if origin_merge_base_output.status.success() {
+        let merge_base = String::from_utf8_lossy(&origin_merge_base_output.stdout).trim().to_string();
+        println!("🔍 Using origin merge base: {}", merge_base);
+        return get_changes_between_commits(root_dir, &merge_base, "HEAD");
+    }
+    
+    // If we can't find a merge base, return empty list
+    println!("⚠️  Could not determine merge base for PR #{}", pr_number);
     Ok(Vec::new())
 }
 

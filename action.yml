@@ -63,6 +63,26 @@ inputs:
   github_token:
     description: 'GitHub token for PR comments and API access'
     required: false
+  recent-commits:
+    description: 'Number of recent commits to check when running locally (default: 5)'
+    required: false
+    default: '5'
+  base-commit:
+    description: 'Base commit SHA for comparison (overrides automatic detection)'
+    required: false
+    default: ''
+  head-commit:
+    description: 'Head commit SHA for comparison (overrides automatic detection)'
+    required: false
+    default: ''
+  base-branch:
+    description: 'Base branch name for comparison (overrides automatic detection)'
+    required: false
+    default: ''
+  head-branch:
+    description: 'Head branch name for comparison (overrides automatic detection)'
+    required: false
+    default: ''
 
 outputs:
   result:
@@ -222,6 +242,11 @@ runs:
           ARGS+=("--default-branch" "${{ inputs.default-branch }}")
         fi
         
+        # Add recent-commits argument if specified
+        if [ -n "${{ inputs.recent-commits }}" ] && [ "${{ inputs.recent-commits }}" != "5" ]; then
+          ARGS+=("--recent-commits" "${{ inputs.recent-commits }}")
+        fi
+        
         # Command-specific arguments
         case "${{ inputs.command }}" in
           plan)
@@ -235,6 +260,55 @@ runs:
             fi
             ;;
         esac
+        
+        # Set up environment variables for pipeline-supplied commits
+        if [ -n "${{ inputs.base-commit }}" ] && [ -n "${{ inputs.head-commit }}" ]; then
+          export SOLARBOAT_BASE_COMMIT="${{ inputs.base-commit }}"
+          export SOLARBOAT_HEAD_COMMIT="${{ inputs.head-commit }}"
+          echo "🔍 Using pipeline-supplied commits:"
+          echo "   Base: ${{ inputs.base-commit }}"
+          echo "   Head: ${{ inputs.head-commit }}"
+          
+          if [ -n "${{ inputs.base-branch }}" ]; then
+            export SOLARBOAT_BASE_BRANCH="${{ inputs.base-branch }}"
+            echo "   Base Branch: ${{ inputs.base-branch }}"
+          fi
+          
+          if [ -n "${{ inputs.head-branch }}" ]; then
+            export SOLARBOAT_HEAD_BRANCH="${{ inputs.head-branch }}"
+            echo "   Head Branch: ${{ inputs.head-branch }}"
+          fi
+          
+          # Set PR number for CD pipeline detection
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            export SOLARBOAT_PR_NUMBER="${{ github.event.number }}"
+            echo "   PR Number: ${{ github.event.number }}"
+          else
+            export SOLARBOAT_PR_NUMBER="pipeline-${GITHUB_RUN_NUMBER}"
+            echo "   Pipeline Run: ${GITHUB_RUN_NUMBER}"
+          fi
+        elif [ "${{ github.event_name }}" = "pull_request" ]; then
+          # Auto-detect PR commits for PR events
+          export SOLARBOAT_PR_NUMBER="${{ github.event.number }}"
+          export SOLARBOAT_BASE_COMMIT="${{ github.event.pull_request.base.sha }}"
+          export SOLARBOAT_HEAD_COMMIT="${{ github.event.pull_request.head.sha }}"
+          export SOLARBOAT_BASE_BRANCH="${{ github.event.pull_request.base.ref }}"
+          export SOLARBOAT_HEAD_BRANCH="${{ github.event.pull_request.head.ref }}"
+          echo "🔍 Auto-detected PR commits:"
+          echo "   PR: #${{ github.event.number }}"
+          echo "   Base: ${{ github.event.pull_request.base.sha }}"
+          echo "   Head: ${{ github.event.pull_request.head.sha }}"
+        elif [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
+          # Auto-detect main branch commits
+          export SOLARBOAT_PR_NUMBER="main-deploy"
+          export SOLARBOAT_BASE_COMMIT="${{ github.event.before }}"
+          export SOLARBOAT_HEAD_COMMIT="${{ github.event.after }}"
+          export SOLARBOAT_BASE_BRANCH="main"
+          export SOLARBOAT_HEAD_BRANCH="main"
+          echo "🔍 Auto-detected main branch commits:"
+          echo "   Base: ${{ github.event.before }}"
+          echo "   Head: ${{ github.event.after }}"
+        fi
         
         # Execute command with error handling
         echo "Executing: solarboat ${{ inputs.command }} ${ARGS[*]}"
@@ -297,6 +371,7 @@ runs:
         echo "### 🔧 Configuration" >> $GITHUB_STEP_SUMMARY
         echo "- **Parallel**: ${{ inputs.parallel }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Default Branch**: ${{ inputs.default-branch }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Recent Commits**: ${{ inputs.recent-commits }}" >> $GITHUB_STEP_SUMMARY
         
         if [ -n "${{ inputs.ignore-workspaces }}" ]; then
           echo "- **Ignored Workspaces**: \`${{ inputs.ignore-workspaces }}\`" >> $GITHUB_STEP_SUMMARY
@@ -304,6 +379,20 @@ runs:
         
         if [ -n "${{ inputs.var-files }}" ]; then
           echo "- **Variable Files**: \`${{ inputs.var-files }}\`" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        # Show commit information if provided
+        if [ -n "${{ inputs.base-commit }}" ] && [ -n "${{ inputs.head-commit }}" ]; then
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔍 Commit Comparison" >> $GITHUB_STEP_SUMMARY
+          echo "- **Base Commit**: \`${{ inputs.base-commit }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Head Commit**: \`${{ inputs.head-commit }}\`" >> $GITHUB_STEP_SUMMARY
+          if [ -n "${{ inputs.base-branch }}" ]; then
+            echo "- **Base Branch**: \`${{ inputs.base-branch }}\`" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -n "${{ inputs.head-branch }}" ]; then
+            echo "- **Head Branch**: \`${{ inputs.head-branch }}\`" >> $GITHUB_STEP_SUMMARY
+          fi
         fi
 
     - name: Comment on PR

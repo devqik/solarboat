@@ -32,7 +32,7 @@ pub fn execute(args: PlanArgs, settings: &Settings) -> anyhow::Result<()> {
         fs::create_dir_all(output_dir)?;
     }
 
-    match helpers::get_changed_modules(&args.path, all, &args.default_branch) {
+    match helpers::get_changed_modules(&args.path, all, &args.default_branch, args.recent_commits) {
         Ok(modules) => {
             if all {
                 println!("🔍 Found {} stateful modules", modules.len());
