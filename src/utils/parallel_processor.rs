@@ -7,6 +7,7 @@ use crate::utils::terraform_operations::{TerraformOperation, OperationType, Oper
 use crate::utils::terraform_background::BackgroundTerraform;
 use crate::utils::terraform_operations::{save_plan_output, run_single_plan, run_single_apply};
 use crate::utils::display_utils::{format_module_path};
+use crate::utils::logger;
 
 /// Groups operations by module to prevent Terraform state lock conflicts
 #[derive(Debug)]
@@ -154,7 +155,7 @@ impl ParallelProcessor {
         results: Arc<Mutex<Vec<OperationResult>>>,
         active_modules: Arc<Mutex<HashMap<String, bool>>>,
     ) {
-        let display_path = format_module_path(&module_path);
+        let _display_path = format_module_path(&module_path);
         
         loop {
             // Get the next operation for this module
@@ -188,7 +189,7 @@ impl ParallelProcessor {
             active.remove(&module_path);
         }
         
-        println!("✅ Completed: {}", display_path);
+        // Note: Individual operation completions are now handled by logger::operation_completion
     }
 
     /// Wait for all operations to complete and return the results.
@@ -221,47 +222,20 @@ impl ParallelProcessor {
         let init_success = if skip_init {
             true // Skip initialization since it was already done
         } else if watch {
-            println!("  🔧 Initializing module...");
             let mut background_tf = BackgroundTerraform::new();
             match background_tf.init_background(module_path) {
                 Ok(_) => {
                     match background_tf.wait_for_completion(300) {
-                        Ok(success) => {
-                            if success {
-                                println!("  ✅ Initialization completed");
-                                true
-                            } else {
-                                println!("  ❌ Initialization failed");
-                                false
-                            }
-                        }
-                        Err(e) => {
-                            println!("  ❌ Initialization failed: {}", e);
-                            false
-                        }
+                        Ok(success) => success,
+                        Err(_) => false,
                     }
                 }
-                Err(e) => {
-                    println!("  ❌ Failed to start initialization: {}", e);
-                    false
-                }
+                Err(_) => false,
             }
         } else {
-            println!("  🔧 Initializing module...");
             match crate::utils::terraform_background::run_terraform_silent("init", &[], module_path, None) {
-                Ok(success) => {
-                    if success {
-                        println!("  ✅ Initialization completed");
-                        true
-                    } else {
-                        println!("  ❌ Initialization failed");
-                        false
-                    }
-                }
-                Err(e) => {
-                    println!("  ❌ Initialization failed: {}", e);
-                    false
-                }
+                Ok(success) => success,
+                Err(_) => false,
             }
         };
 
@@ -278,7 +252,6 @@ impl ParallelProcessor {
 
         // Select workspace if specified
         if let Some(ref workspace_name) = workspace {
-            println!("  🔄 Switching to workspace: {}", workspace_name);
             if let Err(e) = crate::utils::terraform_operations::select_workspace(module_path, workspace_name) {
                 return OperationResult {
                     module_path: module_path.clone(),
@@ -298,10 +271,7 @@ impl ParallelProcessor {
                 (true, None, Vec::new())
             }
             OperationType::Plan { plan_dir } => {
-                println!("  🚀 Running terraform plan...");
-                if !var_files.is_empty() {
-                    println!("  📄 Using {} var files", var_files.len());
-                }
+                logger::operation_status("terraform plan", workspace.as_deref(), var_files.len());
 
                 if watch {
                     let mut background_tf = BackgroundTerraform::new();
@@ -310,7 +280,7 @@ impl ParallelProcessor {
                             match background_tf.wait_for_completion(600) { // 10 minute timeout
                                 Ok(success) => {
                                     if success {
-                                        println!("  ✅ Plan completed successfully");
+                                        logger::operation_completion(module_path, workspace.as_deref(), true);
                                         // Save plan output if plan_dir is specified
                                         if let Some(plan_dir) = plan_dir {
                                             if let Err(e) = save_plan_output(module_path, plan_dir, workspace.as_deref(), &background_tf.get_output()) {
@@ -319,18 +289,18 @@ impl ParallelProcessor {
                                         }
                                         (true, None, background_tf.get_output())
                                     } else {
-                                        println!("  ❌ Plan failed");
+                                        logger::operation_completion(module_path, workspace.as_deref(), false);
                                         (false, Some("Plan failed".to_string()), background_tf.get_output())
                                     }
                                 }
                                 Err(e) => {
-                                    println!("  ❌ Plan failed: {}", e);
+                                    logger::operation_completion(module_path, workspace.as_deref(), false);
                                     (false, Some(format!("Plan failed: {}", e)), background_tf.get_output())
                                 }
                             }
                         }
                         Err(e) => {
-                            println!("  ❌ Failed to start plan: {}", e);
+                            logger::operation_completion(module_path, workspace.as_deref(), false);
                             (false, Some(format!("Failed to start plan: {}", e)), Vec::new())
                         }
                     }
@@ -338,25 +308,22 @@ impl ParallelProcessor {
                     match run_single_plan(module_path, plan_dir.as_deref(), workspace.as_deref(), Some(var_files)) {
                         Ok(success) => {
                             if success {
-                                println!("  ✅ Plan completed successfully");
+                                logger::operation_completion(module_path, workspace.as_deref(), true);
                                 (true, None, Vec::new())
                             } else {
-                                println!("  ❌ Plan failed");
+                                logger::operation_completion(module_path, workspace.as_deref(), false);
                                 (false, Some("Plan failed".to_string()), Vec::new())
                             }
                         }
                         Err(e) => {
-                            println!("  ❌ Plan failed: {}", e);
+                            logger::operation_completion(module_path, workspace.as_deref(), false);
                             (false, Some(format!("Plan failed: {}", e)), Vec::new())
                         }
                     }
                 }
             }
             OperationType::Apply => {
-                println!("  🧱 Running terraform apply...");
-                if !var_files.is_empty() {
-                    println!("  📄 Using {} var files", var_files.len());
-                }
+                logger::operation_status("terraform apply", workspace.as_deref(), var_files.len());
 
                 if watch {
                     let mut background_tf = BackgroundTerraform::new();
@@ -365,21 +332,21 @@ impl ParallelProcessor {
                             match background_tf.wait_for_completion(1800) { // 30 minute timeout
                                 Ok(success) => {
                                     if success {
-                                        println!("  ✅ Apply completed successfully");
+                                        logger::operation_completion(module_path, workspace.as_deref(), true);
                                         (true, None, background_tf.get_output())
                                     } else {
-                                        println!("  ❌ Apply failed");
+                                        logger::operation_completion(module_path, workspace.as_deref(), false);
                                         (false, Some("Apply failed".to_string()), background_tf.get_output())
                                     }
                                 }
                                 Err(e) => {
-                                    println!("  ❌ Apply failed: {}", e);
+                                    logger::operation_completion(module_path, workspace.as_deref(), false);
                                     (false, Some(format!("Apply failed: {}", e)), background_tf.get_output())
                                 }
                             }
                         }
                         Err(e) => {
-                            println!("  ❌ Failed to start apply: {}", e);
+                            logger::operation_completion(module_path, workspace.as_deref(), false);
                             (false, Some(format!("Failed to start apply: {}", e)), Vec::new())
                         }
                     }
@@ -387,15 +354,15 @@ impl ParallelProcessor {
                     match run_single_apply(module_path, Some(var_files)) {
                         Ok(success) => {
                             if success {
-                                println!("  ✅ Apply completed successfully");
+                                logger::operation_completion(module_path, workspace.as_deref(), true);
                                 (true, None, Vec::new())
                             } else {
-                                println!("  ❌ Apply failed");
+                                logger::operation_completion(module_path, workspace.as_deref(), false);
                                 (false, Some("Apply failed".to_string()), Vec::new())
                             }
                         }
                         Err(e) => {
-                            println!("  ❌ Apply failed: {}", e);
+                            logger::operation_completion(module_path, workspace.as_deref(), false);
                             (false, Some(format!("Apply failed: {}", e)), Vec::new())
                         }
                     }

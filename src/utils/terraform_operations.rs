@@ -34,8 +34,6 @@ pub struct OperationResult {
 
 /// Ensure terraform module is initialized before operations
 pub fn ensure_module_initialized(module_path: &str) -> Result<(), String> {
-    println!("  🔧 Initializing module...");
-    
     let output = Command::new("terraform")
         .arg("init")
         .current_dir(module_path)
@@ -47,7 +45,6 @@ pub fn ensure_module_initialized(module_path: &str) -> Result<(), String> {
         return Err(format!("Terraform init failed: {}", error_msg));
     }
 
-    println!("  ✅ Module initialized successfully");
     Ok(())
 }
 
@@ -147,7 +144,10 @@ pub fn run_single_plan(module_path: &str, plan_dir: Option<&str>, workspace: Opt
 /// Run a single terraform apply operation
 pub fn run_single_apply(module_path: &str, var_files: Option<&[String]>) -> Result<bool, String> {
     let mut cmd = Command::new("terraform");
-    cmd.arg("apply").arg("-auto-approve").current_dir(module_path);
+    cmd.arg("apply")
+       .arg("-auto-approve")
+       .arg("-input=false")  // Prevent interactive prompts
+       .current_dir(module_path);
     
     if let Some(var_files) = var_files {
         for var_file in var_files {

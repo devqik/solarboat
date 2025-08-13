@@ -36,6 +36,25 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     if show_banner {
         print_banner();
     }
+    
     let cli = cli::Args::parse();
-    Ok(commands::handle_command(cli)?)
+    
+    // Initialize logger with CLI settings
+    let log_level = match cli.log_level {
+        cli::LogLevel::Silent => utils::logger::LogLevel::Silent,
+        cli::LogLevel::Error => utils::logger::LogLevel::Error,
+        cli::LogLevel::Warn => utils::logger::LogLevel::Warn,
+        cli::LogLevel::Info => utils::logger::LogLevel::Info,
+        cli::LogLevel::Debug => utils::logger::LogLevel::Debug,
+        cli::LogLevel::Trace => utils::logger::LogLevel::Trace,
+    };
+    utils::logger::init(log_level, cli.quiet);
+    
+    match commands::handle_command(cli) {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            utils::logger::error_box("Command Failed", &format!("{}", e));
+            Err(e.into())
+        }
+    }
 }

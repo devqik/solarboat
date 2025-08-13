@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
+use crate::utils::logger;
 
 #[derive(Debug, Default)]
 pub struct Module {
@@ -10,11 +11,15 @@ pub struct Module {
     is_stateful: bool,
 }
 
-pub fn get_changed_modules(root_dir: &str, all: bool, default_branch: &str, recent_commits: u32) -> Result<Vec<String>, String> {
+/// Cleaner version of get_changed_modules with better output
+pub fn get_changed_modules_clean(root_dir: &str, all: bool, default_branch: &str, recent_commits: u32) -> Result<Vec<String>, String> {
     let mut modules = HashMap::new();
 
     // Always discover modules from the root directory
+    logger::dependency_graph_progress("Discovering modules...");
     discover_modules(root_dir, &mut modules)?;
+    
+    logger::dependency_graph_progress("Building dependency graph...");
     build_dependency_graph(&mut modules)?;
 
     if all {
@@ -32,48 +37,46 @@ pub fn get_changed_modules(root_dir: &str, all: bool, default_branch: &str, rece
     let is_on_main = current_branch == default_branch;
     
     if is_on_main {
-        println!("🔍 Currently on {} branch - using enhanced change detection", current_branch);
+        logger::environment_detection("branch", &format!("Currently on {} branch - using enhanced change detection", current_branch));
         
-        // Check if we're running in a CD pipeline (Atlantis-inspired approach)
         if let Ok(pr_number) = std::env::var("SOLARBOAT_PR_NUMBER") {
             if !pr_number.is_empty() {
-                println!("🚀 Detected CD pipeline environment (SOLARBOAT_PR_NUMBER={})", pr_number);
+                logger::environment_detection("pipeline", &format!("Detected CD pipeline environment (PR #{})", pr_number));
                 let changed_files = get_cd_pipeline_changes(root_dir, &pr_number, default_branch)?;
                 let affected_modules = process_changed_modules(&changed_files, &mut modules)?;
                 
                 if affected_modules.is_empty() {
-                    println!("ℹ️  No changes detected in PR #{}", pr_number);
+                    logger::info(&format!("No changes detected in PR #{}", pr_number));
                 }
                 
                 return Ok(affected_modules);
             }
         }
-        
-        // Local environment - use recent commits approach
-        println!("💻 Running in local environment - checking last {} commits", recent_commits);
-        let changed_files = get_main_branch_changes_local(root_dir, recent_commits)?;
+
+        logger::environment_detection("local", &format!("Running in local environment - checking last {} commits", recent_commits));
+        let changed_files = get_main_branch_changes_local_clean(root_dir, recent_commits)?;
         let affected_modules = process_changed_modules(&changed_files, &mut modules)?;
+        
+        // Show git analysis summary with actual affected modules count
+        logger::git_analysis_summary(recent_commits as usize, changed_files.len(), affected_modules.len());
         
         // If no changes detected on main, provide helpful message
         if affected_modules.is_empty() {
-            println!("ℹ️  No changes detected on main branch. This could mean:");
-            println!("   • No recent commits with .tf changes");
-            println!("   • Changes were already applied");
-            println!("   • Use --all flag to process all modules");
+            logger::info("No changes detected on main branch. This could mean:");
+            logger::info("  • No recent commits with .tf changes");
+            logger::info("  • Changes were already applied");
+            logger::info("  • Use --all flag to process all modules");
         }
         
         return Ok(affected_modules);
     }
 
-    // Regular change detection for non-main branches
     let changed_files = get_git_changed_files(".", default_branch)?;
     let affected_modules = process_changed_modules(&changed_files, &mut modules)?;
 
-    // If root_dir is not ".", filter modules based on the root_dir path
     if root_dir != "." {
-        println!("🔍 Filtering modules with path: {}", root_dir);
+        logger::info(&format!("Filtering modules with path: {}", root_dir));
         
-        // Filter the affected modules to only include those matching the path
         let filtered_modules: Vec<String> = affected_modules
             .into_iter()
             .filter(|path| {
@@ -81,7 +84,6 @@ pub fn get_changed_modules(root_dir: &str, all: bool, default_branch: &str, rece
                 let contains_path = path.contains(&format!("/{}/", root_dir)) || 
                                    path.ends_with(&format!("/{}", root_dir));
                 
-                // Don't print anything for keeping or filtering modules
                 contains_path
             })
             .collect();
@@ -89,7 +91,6 @@ pub fn get_changed_modules(root_dir: &str, all: bool, default_branch: &str, rece
         return Ok(filtered_modules);
     }
     
-    // Otherwise return all affected modules without filtering
     Ok(affected_modules)
 }
 
@@ -99,7 +100,6 @@ pub fn discover_modules(root_dir: &str, modules: &mut HashMap<String, Module>) -
         let path = entry.path();
 
         if path.is_dir() {
-            // Recursively search subdirectories
             discover_modules(path.to_str().ok_or("Invalid path")?, modules)?;
 
             let tf_files: Vec<_> = fs::read_dir(&path)
@@ -135,7 +135,6 @@ pub fn build_dependency_graph(modules: &mut HashMap<String, Module>) -> Result<(
     }
 
     println!("🔗 Building dependency graph...");
-    // Don't print the full module details, just the count
     println!("🔍 Found {} modules repo-wide", modules.len());
     Ok(())
 }
@@ -198,7 +197,6 @@ pub fn find_module_dependencies(content: &str, current_dir: &str) -> Vec<String>
 }
 
 pub fn has_backend_config(tf_files: &[fs::DirEntry]) -> bool {
-    // Check if this module refers to other modules (has module blocks)
     let has_module_blocks = tf_files.iter().any(|file| {
         if let Ok(content) = fs::read_to_string(file.path()) {
             let lines: Vec<&str> = content.lines().collect();
@@ -213,10 +211,9 @@ pub fn has_backend_config(tf_files: &[fs::DirEntry]) -> bool {
     });
     
     if has_module_blocks {
-        return true; // This module refers to other modules, so it's stateful
+        return true;
     }
     
-    // Check if this module has a remote backend or local state files
     for file in tf_files {
         if let Ok(content) = fs::read_to_string(file.path()) {
             let lines: Vec<&str> = content.lines().collect();
@@ -226,24 +223,20 @@ pub fn has_backend_config(tf_files: &[fs::DirEntry]) -> bool {
             for line in lines {
                 let trimmed_line = line.trim();
                 
-                // Skip empty lines and comments
                 if trimmed_line.is_empty() || trimmed_line.starts_with('#') || trimmed_line.starts_with("//") {
                     continue;
                 }
                 
-                // Check for terraform block start
                 if trimmed_line.starts_with("terraform") && trimmed_line.contains("{") {
                     in_terraform_block = true;
                     brace_count += 1;
                     continue;
                 }
                 
-                // Check for backend block start while in terraform block
                 if in_terraform_block && trimmed_line.starts_with("backend") && trimmed_line.contains("\"") {
-                    return true; // Found a backend block, this is a stateful module
+                    return true;
                 }
                 
-                // Count braces to track block nesting
                 if trimmed_line.contains("{") {
                     brace_count += 1;
                 }
@@ -257,21 +250,19 @@ pub fn has_backend_config(tf_files: &[fs::DirEntry]) -> bool {
         }
     }
     
-    // Check for local state files
     if let Some(first_file) = tf_files.first() {
         if let Some(dir_path) = first_file.path().parent() {
             if let Ok(entries) = fs::read_dir(dir_path) {
                 for entry in entries.filter_map(|e| e.ok()) {
                     let path = entry.path();
                     if path.is_file() && path.extension().map_or(false, |ext| ext == "tfstate") {
-                        return true; // Found a local state file, this is a stateful module
+                        return true;
                     }
                 }
             }
         }
     }
     
-    // If we didn't find module blocks, backend blocks, or state files, this is a stateless module
     false
 }
 
@@ -296,7 +287,41 @@ fn get_current_branch(root_dir: &str) -> Result<String, String> {
     }
 }
 
-/// Get changes specifically for main branch scenarios (local environment)
+/// Get changes specifically for main branch scenarios (local environment) - clean version
+fn get_main_branch_changes_local_clean(root_dir: &str, recent_commits: u32) -> Result<Vec<String>, String> {
+    let mut total_changes = Vec::new();
+    
+    // Strategy 1: Check recent commits (configurable count)
+    let recent_changes = get_recent_commit_changes_clean(root_dir, recent_commits as usize)?;
+    total_changes.extend(recent_changes);
+    
+    if !total_changes.is_empty() {
+        logger::info("Found changes in recent commits");
+        return Ok(total_changes);
+    }
+    
+    // Strategy 2: Check if there are any staged or unstaged changes
+    let uncommitted_changes = get_uncommitted_changes(root_dir)?;
+    if !uncommitted_changes.is_empty() {
+        logger::info("Found uncommitted changes");
+        total_changes.extend(uncommitted_changes);
+        return Ok(total_changes);
+    }
+    
+    // Strategy 3: Compare with a reference point (e.g., last tag or specific commit)
+    let reference_changes = get_reference_changes(root_dir)?;
+    if !reference_changes.is_empty() {
+        logger::info("Found changes compared to reference point");
+        total_changes.extend(reference_changes);
+        return Ok(total_changes);
+    }
+    
+    logger::info("No changes detected using any strategy");
+    Ok(Vec::new())
+}
+
+/// Get changes specifically for main branch scenarios (local environment) - original version
+#[allow(dead_code)]
 fn get_main_branch_changes_local(root_dir: &str, recent_commits: u32) -> Result<Vec<String>, String> {
     // Strategy 1: Check recent commits (configurable count)
     let recent_changes = get_recent_commit_changes(root_dir, recent_commits as usize)?;
@@ -443,7 +468,41 @@ fn get_pr_changes(root_dir: &str, pr_number: &str, default_branch: &str) -> Resu
     Ok(Vec::new())
 }
 
-/// Get changes from recent commits
+/// Get changes from recent commits (clean version)
+fn get_recent_commit_changes_clean(root_dir: &str, commit_count: usize) -> Result<Vec<String>, String> {
+    let mut changed_files = Vec::new();
+    
+    // Get the last N commits
+    let log_output = Command::new("git")
+        .args(&["log", "--oneline", "-n", &commit_count.to_string()])
+        .current_dir(root_dir)
+        .output()
+        .map_err(|e| e.to_string())?;
+        
+    if !log_output.status.success() {
+        return Ok(Vec::new());
+    }
+    
+    let log_output_str = String::from_utf8_lossy(&log_output.stdout);
+    let commits: Vec<&str> = log_output_str
+        .lines()
+        .filter_map(|line| line.split_whitespace().next())
+        .collect();
+    
+    // Check changes in each commit
+    for commit in commits {
+        let changes = get_changes_between_commits_clean(root_dir, &format!("{}~1", commit), commit)?;
+        changed_files.extend(changes);
+    }
+    
+    // Remove duplicates
+    changed_files.sort();
+    changed_files.dedup();
+    
+    Ok(changed_files)
+}
+
+/// Get changes from recent commits (original version)
 fn get_recent_commit_changes(root_dir: &str, commit_count: usize) -> Result<Vec<String>, String> {
     let mut changed_files = Vec::new();
     
@@ -554,7 +613,58 @@ fn get_reference_changes(root_dir: &str) -> Result<Vec<String>, String> {
     Ok(Vec::new())
 }
 
-/// Get changes between two specific commits
+/// Get changes between two specific commits (clean version)
+fn get_changes_between_commits_clean(root_dir: &str, from_commit: &str, to_commit: &str) -> Result<Vec<String>, String> {
+    let mut changed_files = Vec::new();
+
+    let commit_range = format!("{}..{}", &from_commit[..7.min(from_commit.len())], &to_commit[..7.min(to_commit.len())]);
+    
+    // Get changes between the two commits
+    let diff_output = Command::new("git")
+        .args(&["diff", "--name-only", from_commit, to_commit])
+        .current_dir(root_dir)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if diff_output.status.success() {
+        changed_files.extend(
+            String::from_utf8_lossy(&diff_output.stdout)
+                .lines()
+                .filter(|line| line.ends_with(".tf"))
+                .map(|line| {
+                    // Use a more robust approach to handle paths that might not exist
+                    let file_path = Path::new(root_dir).join(line);
+                    if file_path.exists() {
+                        // If the file exists, canonicalize it
+                        fs::canonicalize(file_path)
+                            .map_err(|e| e.to_string())
+                            .unwrap()
+                            .to_str()
+                            .unwrap()
+                            .to_string()
+                    } else {
+                        // If the file doesn't exist, use the absolute path from the current directory
+                        let current_dir = std::env::current_dir().map_err(|e| e.to_string()).unwrap();
+                        current_dir.join(root_dir).join(line)
+                            .to_str()
+                            .unwrap()
+                            .to_string()
+                    }
+                })
+        );
+    }
+
+    // Remove duplicates
+    changed_files.sort();
+    changed_files.dedup();
+
+    // Use the new logger method for cleaner output
+    logger::git_changes_progress(&commit_range, changed_files.len(), &changed_files);
+
+    Ok(changed_files)
+}
+
+/// Get changes between two specific commits (original version for backward compatibility)
 fn get_changes_between_commits(root_dir: &str, from_commit: &str, to_commit: &str) -> Result<Vec<String>, String> {
     let mut changed_files = Vec::new();
 

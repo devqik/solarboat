@@ -219,6 +219,7 @@ impl BackgroundTerraform {
         let mut cmd = Command::new("terraform");
         cmd.arg("apply")
            .arg("-auto-approve")
+           .arg("-input=false")
            .current_dir(module_path)
            .stdout(Stdio::piped())
            .stderr(Stdio::piped());
