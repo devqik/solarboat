@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use std::path::{Path, PathBuf};
+use crate::utils::error::{SolarboatError, SafeOperations};
 
 #[derive(Debug, Clone)]
 pub enum TerraformStatus {
@@ -21,6 +22,12 @@ pub struct BackgroundTerraform {
     output: Arc<Mutex<Vec<String>>>,
 }
 
+impl Default for BackgroundTerraform {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BackgroundTerraform {
     pub fn new() -> Self {
         Self {
@@ -30,12 +37,22 @@ impl BackgroundTerraform {
         }
     }
 
-    pub fn get_status(&self) -> TerraformStatus {
-        self.status.lock().unwrap().clone()
+    pub fn get_status(&self) -> Result<TerraformStatus, SolarboatError> {
+        let status = SafeOperations::lock_with_timeout(
+            &self.status,
+            Duration::from_secs(1),
+            "terraform_status"
+        )?;
+        Ok(status.clone())
     }
 
-    pub fn get_output(&self) -> Vec<String> {
-        self.output.lock().unwrap().clone()
+    pub fn get_output(&self) -> Result<Vec<String>, SolarboatError> {
+        let output = SafeOperations::lock_with_timeout(
+            &self.output,
+            Duration::from_secs(1),
+            "terraform_output"
+        )?;
+        Ok(output.clone())
     }
 
     pub fn is_running(&mut self) -> bool {
@@ -46,7 +63,7 @@ impl BackgroundTerraform {
         }
     }
 
-    pub fn init_background(&mut self, module_path: &str) -> Result<(), String> {
+    pub fn init_background(&mut self, module_path: &str) -> Result<(), SolarboatError> {
         let mut cmd = Command::new("terraform");
         cmd.arg("init")
            .current_dir(module_path)
@@ -54,14 +71,30 @@ impl BackgroundTerraform {
            .stderr(Stdio::piped());
 
         let mut child = cmd.spawn()
-            .map_err(|e| format!("Failed to start terraform init: {}", e))?;
+            .map_err(|e| SolarboatError::Process {
+                command: "terraform init".to_string(),
+                args: vec!["init".to_string()],
+                cause: e.to_string(),
+                exit_code: None,
+            })?;
 
         let status = Arc::clone(&self.status);
         let output = Arc::clone(&self.output);
 
         // Take stdout and stderr before moving child
-        let stdout = child.stdout.take().unwrap();
-        let stderr = child.stderr.take().unwrap();
+        let stdout = child.stdout.take().ok_or_else(|| SolarboatError::Process {
+            command: "terraform init".to_string(),
+            args: vec!["init".to_string()],
+            cause: "Failed to capture stdout".to_string(),
+            exit_code: None,
+        })?;
+        
+        let stderr = child.stderr.take().ok_or_else(|| SolarboatError::Process {
+            command: "terraform init".to_string(),
+            args: vec!["init".to_string()],
+            cause: "Failed to capture stderr".to_string(),
+            exit_code: None,
+        })?;
 
         // Spawn a thread to monitor the init process
         let child_handle = thread::spawn(move || {
@@ -71,7 +104,13 @@ impl BackgroundTerraform {
             // Monitor stdout
             for line in stdout_reader.lines() {
                 if let Ok(line) = line {
-                    output.lock().unwrap().push(line.clone());
+                    if let Ok(mut output) = SafeOperations::lock_with_timeout(
+                        &output,
+                        Duration::from_secs(1),
+                        "output_stdout"
+                    ) {
+                        output.push(line.clone());
+                    }
                     println!("  {}", line);
                 }
             }
@@ -79,20 +118,44 @@ impl BackgroundTerraform {
             // Monitor stderr
             for line in stderr_reader.lines() {
                 if let Ok(line) = line {
-                    output.lock().unwrap().push(format!("ERROR: {}", line));
+                    if let Ok(mut output) = SafeOperations::lock_with_timeout(
+                        &output,
+                        Duration::from_secs(1),
+                        "output_stderr"
+                    ) {
+                        output.push(format!("ERROR: {}", line));
+                    }
                     eprintln!("  ERROR: {}", line);
                 }
             }
 
             // Wait for process to complete
-            let exit_status = child.wait().unwrap();
+            let exit_status = match child.wait() {
+                Ok(status) => status,
+                Err(e) => {
+                    eprintln!("Failed to wait for terraform init process: {}", e);
+                    return;
+                }
+            };
             
             if exit_status.success() {
-                *status.lock().unwrap() = TerraformStatus::Completed { success: true };
+                if let Ok(mut status) = SafeOperations::lock_with_timeout(
+                    &status,
+                    Duration::from_secs(1),
+                    "status_success"
+                ) {
+                    *status = TerraformStatus::Completed { success: true };
+                }
             } else {
-                *status.lock().unwrap() = TerraformStatus::Failed { 
-                    error: "Terraform init failed".to_string() 
-                };
+                if let Ok(mut status) = SafeOperations::lock_with_timeout(
+                    &status,
+                    Duration::from_secs(1),
+                    "status_failed"
+                ) {
+                    *status = TerraformStatus::Failed { 
+                        error: "Terraform init failed".to_string() 
+                    };
+                }
             }
         });
 
@@ -219,6 +282,7 @@ impl BackgroundTerraform {
         let mut cmd = Command::new("terraform");
         cmd.arg("apply")
            .arg("-auto-approve")
+           .arg("-input=false")
            .current_dir(module_path)
            .stdout(Stdio::piped())
            .stderr(Stdio::piped());
@@ -342,9 +406,12 @@ impl BackgroundTerraform {
         }
 
         match self.get_status() {
-            TerraformStatus::Completed { success } => Ok(success),
-            TerraformStatus::Failed { error } => Err(error),
-            _ => Err("Operation did not complete properly".to_string()),
+            Ok(status) => match status {
+                TerraformStatus::Completed { success } => Ok(success),
+                TerraformStatus::Failed { error } => Err(error),
+                _ => Err("Operation did not complete properly".to_string()),
+            },
+            Err(e) => Err(format!("Failed to get status: {}", e)),
         }
     }
 

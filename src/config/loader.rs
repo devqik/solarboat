@@ -1,4 +1,5 @@
 use crate::config::types::SolarboatConfig;
+use crate::utils::logger;
 use anyhow::{Context, Result};
 use serde_json;
 use std::path::{Path, PathBuf};
@@ -36,12 +37,12 @@ impl ConfigLoader {
         
         match config_path {
             Some(path) => {
-                println!("📄 Loading configuration from: {}", path.display());
+                logger::config_loading(&path.display().to_string());
                 let config = self.load_from_path(&path)?;
                 Ok(Some(config))
             }
             None => {
-                println!("ℹ️  No configuration file found, using defaults");
+                logger::info("No configuration file found, using defaults");
                 Ok(None)
             }
         }
@@ -88,7 +89,7 @@ impl ConfigLoader {
             if config_path.exists() {
                 if let Ok(env) = env::var("SOLARBOAT_ENV") {
                     if !env.trim().is_empty() && filename.contains(&env) {
-                        println!("📄 Detected SOLARBOAT_ENV='{}', loading environment-specific config: {}", env, config_path.display());
+                        logger::info(&format!("Detected SOLARBOAT_ENV='{}', loading environment-specific config", env));
                     }
                 }
                 return Ok(Some(config_path));
@@ -112,7 +113,7 @@ impl ConfigLoader {
         }
         
         // Validate var file paths
-        self.validate_var_files(&config.global.var_files, "global", &mut validation_warnings)?;
+        // Note: var_files field has been removed, only workspace_var_files are validated now
         
         if let Some(workspace_files) = &config.global.workspace_var_files {
             for (workspace, files) in &workspace_files.workspaces {
@@ -121,7 +122,7 @@ impl ConfigLoader {
         }
         
         for (module_path, module_config) in &config.modules {
-            self.validate_var_files(&module_config.var_files, &format!("module '{}'", module_path), &mut validation_warnings)?;
+            // Note: var_files field has been removed, only workspace_var_files are validated now
             
             if let Some(workspace_files) = &module_config.workspace_var_files {
                 for (workspace, files) in &workspace_files.workspaces {
@@ -133,19 +134,19 @@ impl ConfigLoader {
         // Validate workspace names (basic sanity check)
         self.validate_workspace_names(config, &mut validation_warnings)?;
         
-        // Print warnings
+        // Print warnings and summary
         if !validation_warnings.is_empty() {
-            println!("⚠️  Configuration validation warnings:");
-            for warning in validation_warnings {
-                println!("   • {}", warning);
-            }
+            logger::config_validation_warnings(&validation_warnings);
         }
+        
+        // Print validation summary
+        logger::config_validation_summary(validation_warnings.len(), validation_errors.len());
         
         // Print errors and return error if any
         if !validation_errors.is_empty() {
-            eprintln!("❌ Configuration validation errors:");
+            logger::error_box("Configuration Validation Failed", &format!("Configuration validation failed with {} error(s)", validation_errors.len()));
             for error in &validation_errors {
-                eprintln!("   • {}", error);
+                logger::error(&format!("  • {}", error));
             }
             return Err(anyhow::anyhow!("Configuration validation failed with {} error(s)", validation_errors.len()));
         }
@@ -182,7 +183,7 @@ impl ConfigLoader {
     
     /// Validate workspace names for basic sanity
     fn validate_workspace_names(&self, config: &SolarboatConfig, warnings: &mut Vec<String>) -> Result<()> {
-        let reserved_names = ["default", "terraform"];
+        let reserved_names = ["terraform"]; // Removed "default" from reserved names
         
         // Check global workspace var files
         if let Some(workspace_files) = &config.global.workspace_var_files {
@@ -196,6 +197,12 @@ impl ConfigLoader {
         // Check module workspace var files
         for (module_path, module_config) in &config.modules {
             if let Some(workspace_files) = &module_config.workspace_var_files {
+                // Only warn about "default" workspace if there are multiple workspaces configured
+                // Single "default" workspace is normal and expected
+                if workspace_files.workspaces.len() > 1 && workspace_files.workspaces.contains_key("default") {
+                    warnings.push(format!("Workspace name 'default' in module '{}' is configured alongside other workspaces - this may cause confusion", module_path));
+                }
+                
                 for workspace in workspace_files.workspaces.keys() {
                     if reserved_names.contains(&workspace.as_str()) {
                         warnings.push(format!("Workspace name '{}' in module '{}' is reserved and may cause issues", 
@@ -221,12 +228,16 @@ mod tests {
         let config_content = r#"{
             "global": {
                 "ignore_workspaces": ["dev", "test"],
-                "var_files": ["global.tfvars"]
+                "workspace_var_files": {
+                    "default": ["global.tfvars"]
+                }
             },
             "modules": {
                 "infrastructure/networking": {
                     "ignore_workspaces": ["dev"],
-                    "var_files": ["networking.tfvars"]
+                    "workspace_var_files": {
+                        "default": ["networking.tfvars"]
+                    }
                 }
             }
         }"#;
@@ -237,7 +248,8 @@ mod tests {
         let config = loader.load().unwrap().unwrap();
         
         assert_eq!(config.global.ignore_workspaces, vec!["dev", "test"]);
-        assert_eq!(config.global.var_files, vec!["global.tfvars"]);
+        // Note: var_files field has been removed
+        assert!(config.global.workspace_var_files.is_some());
         assert!(config.modules.contains_key("infrastructure/networking"));
     }
     
@@ -249,8 +261,9 @@ global:
   ignore_workspaces:
     - dev
     - test
-  var_files:
-    - global.tfvars
+  workspace_var_files:
+    default:
+      - global.tfvars
 "#;
         
         fs::write(temp_dir.path().join("solarboat.yml"), config_content).unwrap();

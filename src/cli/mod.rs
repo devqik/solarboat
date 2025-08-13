@@ -1,2 +1,2 @@
 mod args;
-pub use self::args::{Args, Commands, ScanArgs, PlanArgs, ApplyArgs};
+pub use self::args::{Args, Commands, ScanArgs, PlanArgs, ApplyArgs, LogLevel};

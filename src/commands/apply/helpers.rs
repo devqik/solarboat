@@ -3,17 +3,18 @@ use crate::commands::plan::helpers as plan_helpers;
 use crate::utils::parallel_processor::ParallelProcessor;
 use crate::utils::terraform_operations::{TerraformOperation, OperationType, ensure_module_initialized};
 use crate::config::ConfigResolver;
-use crate::utils::display_utils::{format_module_path, format_workspace_list};
+use crate::utils::logger;
+use colored::*;
+use std::process::Command;
 
 #[derive(Debug)]
 pub struct ModuleError {
     path: String,
-    command: String,
     error: String,
 }
 
 pub fn get_changed_modules(root_dir: &str, force: bool, default_branch: &str, recent_commits: u32) -> Result<Vec<String>, String> {
-    scan_utils::get_changed_modules(root_dir, force, default_branch, recent_commits)
+    scan_utils::get_changed_modules_clean(root_dir, force, default_branch, recent_commits)
 }
 
 pub fn run_terraform_apply(
@@ -46,19 +47,20 @@ pub fn run_terraform_apply(
     
     // Build operations for all modules and workspaces
     for module in modules {
-        let display_path = format_module_path(module);
-        println!("\n📦 {}", display_path);
+        logger::module_header(module);
 
+        // Validate module before processing
+        validate_module_configuration(module)?;
+        
         ensure_module_initialized(module)?;
+        logger::module_init_status(true);
         
         let workspaces = plan_helpers::get_workspaces(module)?;
         
         if workspaces.len() <= 1 {
             // Single workspace (default)
             let default_var_files = config_resolver.get_workspace_var_files(module, "default", var_files);
-            if !default_var_files.is_empty() {
-                println!("  📄 Using {} var files", default_var_files.len());
-            }
+            logger::workspace_discovery(&workspaces);
             
             let operation = TerraformOperation {
                 module_path: module.clone(),
@@ -68,30 +70,25 @@ pub fn run_terraform_apply(
                 watch,
                 skip_init: true, // Already initialized before workspace listing
             };
-            processor.add_operation(operation);
+            processor.add_operation(operation).map_err(|e| format!("Failed to add operation: {}", e))?;
         } else {
-
-            println!("  🌐 Found workspaces: {}", format_workspace_list(&workspaces));
+            logger::workspace_discovery(&workspaces);
             
             for workspace in workspaces {
                 // Check if workspace should be ignored using config resolver
                 if config_resolver.should_ignore_workspace(module, &workspace, ignore_workspaces) {
                     if workspace == "default" {
-                        println!("  ⏭️  Skipping: {} (auto-ignored)", workspace);
+                        logger::workspace_skip(&workspace, "auto-ignored");
                         continue;
                     } else {
-                        println!("  ⏭️  Skipping: {} (configured)", workspace);
+                        logger::workspace_skip(&workspace, "configured");
                         continue;
                     }
                 }
                 
-                println!("  🔄 Processing: {}", workspace);
-                
                 // Get workspace-specific var files
                 let workspace_var_files = config_resolver.get_workspace_var_files(module, &workspace, var_files);
-                if !workspace_var_files.is_empty() {
-                    println!("  📄 Using {} var files", workspace_var_files.len());
-                }
+                logger::workspace_processing(&workspace, workspace_var_files.len());
                 
                 let operation = TerraformOperation {
                     module_path: module.clone(),
@@ -101,20 +98,22 @@ pub fn run_terraform_apply(
                     watch,
                     skip_init: true, // Already initialized before workspace listing
                 };
-                processor.add_operation(operation);
+                processor.add_operation(operation).map_err(|e| format!("Failed to add operation: {}", e))?;
             }
         }
     }
     
     // Start processing
-    println!("\n🚀 Starting parallel processing with {} workers...", parallel_limit);
-    processor.start();
+    logger::parallel_processing_start(parallel_limit);
+    processor.start().map_err(|e| format!("Failed to start processor: {}", e))?;
     
     // Wait for completion and collect results
-    let results = processor.wait_for_completion();
+    let results = processor.wait_for_completion().map_err(|e| format!("Failed to wait for completion: {}", e))?;
+    let total_count = results.len();
     
     // Process results and report failures
     let mut failed_modules = Vec::new();
+    let mut successful_count = 0;
     
     for result in results {
         if !result.success {
@@ -125,20 +124,77 @@ pub fn run_terraform_apply(
             
             failed_modules.push(ModuleError {
                 path: module_path,
-                command: "apply".to_string(),
                 error: result.error.unwrap_or_else(|| "Unknown error".to_string()),
             });
+        } else {
+            successful_count += 1;
         }
     }
     
+    // Show processing summary
+    logger::processing_summary(total_count, successful_count, failed_modules.len());
+    
     if !failed_modules.is_empty() {
-        println!("\n⚠️  Some modules failed to process:");
+        use crate::utils::logger;
+        
+        // Show error summary
+        logger::error_summary("Apply Results", failed_modules.len(), total_count);
+        
+        println!("\n❌ Failed modules:");
         for failure in &failed_modules {
-            println!("  ❌ {}: {} failed - {}", failure.path, failure.command, failure.error);
+            // Extract module name from path for cleaner display
+            let module_name = failure.path.split('/').last().unwrap_or(&failure.path);
+            
+            // Truncate long error messages for better readability
+            let friendly_error = if failure.error.len() > 80 {
+                format!("{}...", &failure.error[..80])
+            } else {
+                failure.error.clone()
+            };
+            
+            println!("  • {}: {}", module_name.cyan(), friendly_error.dimmed());
         }
         return Err(format!("Failed to process {} module(s)", failed_modules.len()));
     }
     
     println!("\n✅ All modules processed successfully!");
+    Ok(())
+}
+
+/// Validate module configuration before processing
+fn validate_module_configuration(module_path: &str) -> Result<(), String> {
+    // Check if terraform files exist
+    let tf_files = ["main.tf", "variables.tf", "terraform.tfvars"];
+    let mut has_tf_files = false;
+    
+    for file in &tf_files {
+        if std::path::Path::new(module_path).join(file).exists() {
+            has_tf_files = true;
+            break;
+        }
+    }
+    
+    if !has_tf_files {
+        return Err(format!("No Terraform files found in module: {}", module_path));
+    }
+    
+    // Run terraform validate to check configuration
+    let output = Command::new("terraform")
+        .arg("validate")
+        .current_dir(module_path)
+        .output();
+    
+    match output {
+        Ok(output) => {
+            if !output.status.success() {
+                let error = String::from_utf8_lossy(&output.stderr);
+                return Err(format!("Terraform validation failed for {}: {}", module_path, error));
+            }
+        }
+        Err(e) => {
+            return Err(format!("Failed to run terraform validate for {}: {}", module_path, e));
+        }
+    }
+    
     Ok(())
 }

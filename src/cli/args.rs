@@ -1,4 +1,14 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+pub enum LogLevel {
+    Silent,
+    Error,
+    Warn,
+    Info,
+    Debug,
+    Trace,
+}
 
 #[derive(Parser)]
 #[command(
@@ -28,6 +38,26 @@ pub struct Args {
                     and use only CLI arguments and defaults. Use --no-config=false to enable config loading."
     )]
     pub no_config: Option<String>,
+
+    #[clap(
+        short,
+        long,
+        value_enum,
+        default_value = "info",
+        help = "Set the log level for output verbosity",
+        long_help = "Control the verbosity of output messages. Options range from silent (no output) \
+                    to trace (maximum detail). Default is info."
+    )]
+    pub log_level: LogLevel,
+
+    #[clap(
+        short,
+        long,
+        help = "Suppress all output except errors",
+        long_help = "When enabled, suppresses all output except error messages. \
+                    This is useful for scripting and automation."
+    )]
+    pub quiet: bool,
 
     #[command(subcommand)]
     pub command: Commands,

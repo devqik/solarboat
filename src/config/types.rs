@@ -10,76 +10,34 @@ pub struct WorkspaceVarFiles {
 }
 
 /// Global configuration settings applied to all modules
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct GlobalConfig {
-    /// Workspace names to ignore across all modules
+    /// Workspaces to ignore globally
     #[serde(default)]
     pub ignore_workspaces: Vec<String>,
-    
-    /// Variable files to use for all modules
-    #[serde(default)]
-    pub var_files: Vec<String>,
-    
-    /// Workspace-specific variable files for all modules
-    #[serde(default)]
+    /// Global workspace variable file mappings
     pub workspace_var_files: Option<WorkspaceVarFiles>,
 }
 
 /// Module-specific configuration settings
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ModuleConfig {
-    /// Workspace names to ignore for this specific module
+    /// Workspaces to ignore for this module
     #[serde(default)]
     pub ignore_workspaces: Vec<String>,
-    
-    /// Variable files to use for this specific module
-    #[serde(default)]
-    pub var_files: Vec<String>,
-    
-    /// Workspace-specific variable files for this module
-    #[serde(default)]
+    /// Module-specific workspace variable file mappings
     pub workspace_var_files: Option<WorkspaceVarFiles>,
 }
 
 /// Root configuration structure for solarboat
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SolarboatConfig {
     /// Global configuration settings
     #[serde(default)]
     pub global: GlobalConfig,
-    
-    /// Module-specific configuration settings
+    /// Module-specific configurations
     #[serde(default)]
     pub modules: HashMap<String, ModuleConfig>,
-}
-
-impl Default for SolarboatConfig {
-    fn default() -> Self {
-        Self {
-            global: GlobalConfig::default(),
-            modules: HashMap::new(),
-        }
-    }
-}
-
-impl Default for GlobalConfig {
-    fn default() -> Self {
-        Self {
-            ignore_workspaces: Vec::new(),
-            var_files: Vec::new(),
-            workspace_var_files: None,
-        }
-    }
-}
-
-impl Default for ModuleConfig {
-    fn default() -> Self {
-        Self {
-            ignore_workspaces: Vec::new(),
-            var_files: Vec::new(),
-            workspace_var_files: None,
-        }
-    }
 }
 
 impl WorkspaceVarFiles {
