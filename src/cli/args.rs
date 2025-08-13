@@ -90,6 +90,16 @@ pub struct ScanArgs {
                     merge with the default branch. Default is 'main'."
     )]
     pub default_branch: String,
+
+    #[clap(
+        long,
+        default_value = "5",
+        help = "Number of recent commits to check when running locally (not in CD pipeline)",
+        long_help = "When running locally (not in a CD pipeline), this specifies how many recent \
+                    commits to check for changes. Default is 5. This is ignored when running in \
+                    a CD pipeline (when SOLARBOAT_PR_NUMBER is set)."
+    )]
+    pub recent_commits: u32,
 }
 
 #[derive(Parser)]
@@ -175,6 +185,16 @@ pub struct PlanArgs {
                     merge with the default branch. Default is 'main'."
     )]
     pub default_branch: String,
+
+    #[clap(
+        long,
+        default_value = "5",
+        help = "Number of recent commits to check when running locally (not in CD pipeline)",
+        long_help = "When running locally (not in a CD pipeline), this specifies how many recent \
+                    commits to check for changes. Default is 5. This is ignored when running in \
+                    a CD pipeline (when SOLARBOAT_PR_NUMBER is set)."
+    )]
+    pub recent_commits: u32,
 }
 
 #[derive(Parser)]
@@ -261,4 +281,14 @@ pub struct ApplyArgs {
                     merge with the default branch. Default is 'main'."
     )]
     pub default_branch: String,
+
+    #[clap(
+        long,
+        default_value = "5",
+        help = "Number of recent commits to check when running locally (not in CD pipeline)",
+        long_help = "When running locally (not in a CD pipeline), this specifies how many recent \
+                    commits to check for changes. Default is 5. This is ignored when running in \
+                    a CD pipeline (when SOLARBOAT_PR_NUMBER is set)."
+    )]
+    pub recent_commits: u32,
 }

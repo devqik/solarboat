@@ -23,7 +23,7 @@ pub fn execute(args: ScanArgs, _settings: &Settings) -> anyhow::Result<()> {
     match git_check {
         Ok(output) if output.status.success() => {
             // We're in a git repository, proceed with scanning
-            match scan_utils::get_changed_modules(&args.path, all, &args.default_branch) {
+            match scan_utils::get_changed_modules(&args.path, all, &args.default_branch, args.recent_commits) {
                 Ok(modules) => {
                     // Use a HashSet to deduplicate modules based on their names
                     let mut unique_module_names = HashSet::new();

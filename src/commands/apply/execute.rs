@@ -33,7 +33,7 @@ pub fn execute(args: ApplyArgs, settings: &Settings) -> anyhow::Result<()> {
         println!("⚠️  Running in APPLY mode - changes will be applied!");
     }
 
-    match helpers::get_changed_modules(&args.path, all, &args.default_branch) {
+    match helpers::get_changed_modules(&args.path, all, &args.default_branch, args.recent_commits) {
         Ok(modules) => {
             if all {
                 println!("🔍 Found {} stateful modules", modules.len());

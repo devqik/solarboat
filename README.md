@@ -48,7 +48,7 @@ Inspired by the Ancient Egyptian solar boats that carried Pharaohs through their
 ```bash
 cargo install solarboat
 # Or install a specific version
-cargo install solarboat --version 0.8.5
+cargo install solarboat --version 0.8.6
 ```
 
 **From Release Binaries:**
@@ -226,13 +226,13 @@ jobs:
           fetch-depth: 0
 
       - name: Scan for Changes
-        uses: devqik/solarboat@v0.8.5
+        uses: devqik/solarboat@v0.8.6
         with:
           command: scan
 
       - name: Plan Infrastructure
         if: github.event_name == 'pull_request'
-        uses: devqik/solarboat@v0.8.5
+        uses: devqik/solarboat@v0.8.6
         with:
           command: plan
           output-dir: terraform-plans
@@ -241,7 +241,7 @@ jobs:
 
       - name: Apply Changes
         if: github.ref == 'refs/heads/main'
-        uses: devqik/solarboat@v0.8.5
+        uses: devqik/solarboat@v0.8.6
         with:
           command: apply
           apply-dryrun: false
@@ -271,12 +271,12 @@ jobs:
 
       - name: Plan Infrastructure Changes
         if: github.event_name == 'pull_request'
-        uses: devqik/solarboat@v0.8.5
+        uses: devqik/solarboat@v0.8.6
         with:
           command: plan
           config: ./infrastructure/solarboat.json
           terraform-version: "1.8.0"
-          solarboat-version: "v0.8.5"
+          solarboat-version: "v0.8.6"
           parallel: 3
           ignore-workspaces: dev,test
           output-dir: terraform-plans
@@ -284,7 +284,7 @@ jobs:
 
       - name: Apply Infrastructure Changes
         if: github.ref == 'refs/heads/main'
-        uses: devqik/solarboat@v0.8.5
+        uses: devqik/solarboat@v0.8.6
         with:
           command: apply
           apply-dryrun: false
@@ -292,6 +292,45 @@ jobs:
           terraform-version: "1.8.0"
           parallel: 2
           continue-on-error: false
+```
+
+### **Pipeline-Supplied Commits (New Feature)**
+
+Solarboat now supports intelligent change detection with pipeline-supplied commit information for more reliable CI/CD workflows.
+
+#### **Automatic Detection (Recommended)**
+
+The GitHub Action automatically detects the appropriate commits based on the event:
+
+- **Pull Requests**: Uses `base.sha` and `head.sha` from the PR
+- **Main Branch Pushes**: Uses `before` and `after` commit hashes
+- **Local Mode**: Falls back to checking recent commits (configurable)
+
+#### **Manual Commit Specification**
+
+For advanced use cases, you can manually specify commit ranges:
+
+```yaml
+- name: Custom Commit Comparison
+  uses: devqik/solarboat@v0.8.6
+  with:
+    command: plan
+    base-commit: abc1234
+    head-commit: def5678
+    base-branch: main
+    head-branch: feature/new-module
+```
+
+#### **Local Development Mode**
+
+When no commit information is provided, Solarboat runs in local mode:
+
+```yaml
+- name: Local Development Mode
+  uses: devqik/solarboat@v0.8.6
+  with:
+    command: plan
+    recent-commits: 5 # Check last 5 commits for changes
 ```
 
 ### **Action Inputs:**
@@ -310,6 +349,11 @@ jobs:
 | `watch`             | Show real-time output                    | `false`           | ❌       |
 | `parallel`          | Number of parallel processes (max 4)     | `1`               | ❌       |
 | `default-branch`    | Default git branch for comparisons       | `main`            | ❌       |
+| `recent-commits`    | Recent commits to check (local mode)     | `5`               | ❌       |
+| `base-commit`       | Base commit SHA for comparison           | auto-detect       | ❌       |
+| `head-commit`       | Head commit SHA for comparison           | auto-detect       | ❌       |
+| `base-branch`       | Base branch name for comparison          | auto-detect       | ❌       |
+| `head-branch`       | Head branch name for comparison          | auto-detect       | ❌       |
 | `solarboat-version` | Solarboat CLI version to use             | `latest`          | ❌       |
 | `terraform-version` | Terraform version to use                 | `latest`          | ❌       |
 | `continue-on-error` | Continue workflow on Solarboat failure   | `false`           | ❌       |
@@ -329,7 +373,7 @@ jobs:
 ```yaml
 - name: Plan Infrastructure
   id: plan
-  uses: devqik/solarboat@v0.8.5
+  uses: devqik/solarboat@v0.8.6
   with:
     command: plan
     github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -345,14 +389,14 @@ jobs:
 
 ```yaml
 - name: Plan Staging
-  uses: devqik/solarboat@v0.8.5
+  uses: devqik/solarboat@v0.8.6
   with:
     command: plan
     config: ./configs/solarboat.staging.json
     path: ./environments/staging
 
 - name: Plan Production
-  uses: devqik/solarboat@v0.8.5
+  uses: devqik/solarboat@v0.8.6
   with:
     command: plan
     config: ./configs/solarboat.prod.json
@@ -364,7 +408,7 @@ jobs:
 
 ```yaml
 - name: Apply with Error Handling
-  uses: devqik/solarboat@v0.8.5
+  uses: devqik/solarboat@v0.8.6
   with:
     command: apply
     apply-dryrun: false
