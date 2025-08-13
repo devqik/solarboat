@@ -91,6 +91,12 @@ pub struct Logger {
     quiet: bool,
 }
 
+impl Default for Logger {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Logger {
     pub fn new() -> Self {
         Self {
@@ -517,6 +523,69 @@ impl Logger {
         }
     }
 
+    /// Print changed files in a beautiful, organized way
+    pub fn changed_files_summary(&self, files: &[String]) {
+        if self.quiet || self.level < LogLevel::Info {
+            return;
+        }
+        
+        if files.is_empty() {
+            return;
+        }
+        
+        // Group files by directory for better organization
+        let mut file_groups: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+        
+        for file_path in files {
+            let path = std::path::Path::new(file_path);
+            if let Some(parent) = path.parent() {
+                let parent_str = parent.to_string_lossy().to_string();
+                let file_name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                
+                file_groups.entry(parent_str).or_insert_with(Vec::new).push(file_name);
+            }
+        }
+        
+        // Sort directories for consistent output
+        let mut sorted_dirs: Vec<_> = file_groups.keys().collect();
+        sorted_dirs.sort();
+        
+        println!("  {} Changed files:", "📝".blue());
+        
+        for dir in sorted_dirs {
+            let files_in_dir = &file_groups[dir];
+            
+            // Get a shorter, more readable directory name
+            let short_dir = if dir.contains("/terraform/") {
+                if let Some(terraform_part) = dir.split("/terraform/").nth(1) {
+                    format!("terraform/{}", terraform_part)
+                } else {
+                    dir.clone()
+                }
+            } else {
+                dir.clone()
+            };
+            
+            println!("    {} {}", "📁".cyan(), short_dir.cyan().bold());
+            
+            // Sort files for consistent output
+            let mut sorted_files = files_in_dir.clone();
+            sorted_files.sort();
+            
+            for file in sorted_files {
+                let file_icon = if file.ends_with(".tf") {
+                    "🔧"
+                } else if file.ends_with(".tfvars") {
+                    "⚙️"
+                } else {
+                    "📄"
+                };
+                
+                println!("      {} {} {}", file_icon.dimmed(), "•".dimmed(), file.dimmed());
+            }
+        }
+    }
+
     /// Print a summary of git analysis
     pub fn git_analysis_summary(&self, total_commits: usize, total_changes: usize, modules_found: usize) {
         if self.quiet || self.level < LogLevel::Info {
@@ -788,6 +857,11 @@ pub fn success_box(title: &str, message: &str) {
 pub fn git_changes_progress(commit_range: &str, changed_count: usize, total_files: &[String]) {
     let logger = get();
     logger.git_changes_progress(commit_range, changed_count, total_files);
+}
+
+pub fn changed_files_summary(files: &[String]) {
+    let logger = get();
+    logger.changed_files_summary(files);
 }
 
 pub fn git_analysis_summary(total_commits: usize, total_changes: usize, modules_found: usize) {

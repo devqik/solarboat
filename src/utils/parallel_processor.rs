@@ -8,6 +8,7 @@ use crate::utils::terraform_background::BackgroundTerraform;
 use crate::utils::terraform_operations::{save_plan_output, run_single_plan, run_single_apply};
 use crate::utils::display_utils::{format_module_path};
 use crate::utils::logger;
+use crate::utils::error::{SolarboatError, SafeOperations};
 
 /// Groups operations by module to prevent Terraform state lock conflicts
 #[derive(Debug)]
@@ -51,42 +52,79 @@ impl ParallelProcessor {
             module_groups: Arc::new(Mutex::new(HashMap::new())),
             results: Arc::new(Mutex::new(Vec::new())),
             active_modules: Arc::new(Mutex::new(HashMap::new())),
-            parallel_limit: parallel_limit.max(1).min(4), // Clamp between 1 and 4
+            parallel_limit: parallel_limit.clamp(1, 4), // Clamp between 1 and 4
             worker_handle: None,
         }
     }
 
     /// Add an operation to the processing queue.
     /// Operations are automatically grouped by module to prevent state lock conflicts.
-    pub fn add_operation(&self, operation: TerraformOperation) {
-        let mut groups = self.module_groups.lock().unwrap();
+    pub fn add_operation(&self, operation: TerraformOperation) -> Result<(), SolarboatError> {
+        let mut groups = SafeOperations::lock_with_timeout(
+            &self.module_groups,
+            Duration::from_secs(5),
+            "module_groups"
+        )?;
+        
         let module_path = operation.module_path.clone();
         
         groups.entry(module_path.clone())
             .or_insert_with(|| ModuleGroup::new(module_path))
             .add_operation(operation);
+        
+        Ok(())
     }
 
     /// Start the worker thread that manages the parallel processing.
     /// This ensures that all workspaces of the same module are processed sequentially
     /// while different modules can run in parallel.
-    pub fn start(&mut self) {
+    pub fn start(&mut self) -> Result<(), SolarboatError> {
         let module_groups = Arc::clone(&self.module_groups);
         let results = Arc::clone(&self.results);
         let active_modules = Arc::clone(&self.active_modules);
         let parallel_limit = self.parallel_limit;
 
         let handle = thread::spawn(move || {
+            let start_time = std::time::Instant::now();
+            let max_duration = Duration::from_secs(300); // 5 minute timeout
+            
             loop {
+                // Check for timeout
+                if start_time.elapsed() > max_duration {
+                    logger::warn("Worker thread timeout reached, stopping processing");
+                    break;
+                }
+                
                 // Check if there are any operations to process
                 let has_operations = {
-                    let groups = module_groups.lock().unwrap();
+                    let groups = match SafeOperations::lock_with_timeout(
+                        &module_groups,
+                        Duration::from_secs(1),
+                        "module_groups_check"
+                    ) {
+                        Ok(groups) => groups,
+                        Err(e) => {
+                            logger::warn(&format!("Failed to acquire module groups lock: {}", e));
+                            break;
+                        }
+                    };
                     groups.values().any(|group| !group.is_empty())
                 };
 
                 if !has_operations {
                     // Check if all operations are complete
-                    let active = active_modules.lock().unwrap();
+                    let active = match SafeOperations::lock_with_timeout(
+                        &active_modules,
+                        Duration::from_secs(1),
+                        "active_modules_check"
+                    ) {
+                        Ok(active) => active,
+                        Err(e) => {
+                            logger::warn(&format!("Failed to acquire active modules lock: {}", e));
+                            break;
+                        }
+                    };
+                    
                     if active.is_empty() {
                         break;
                     }
@@ -96,30 +134,67 @@ impl ParallelProcessor {
 
                 // Try to start a new module processing
                 let can_start = {
-                    let active = active_modules.lock().unwrap();
-                    active.len() < parallel_limit
+                    match SafeOperations::lock_with_timeout(
+                        &active_modules,
+                        Duration::from_secs(1),
+                        "active_modules_limit"
+                    ) {
+                        Ok(active) => active.len() < parallel_limit,
+                        Err(_) => {
+                            // If we can't acquire the lock, assume we can't start
+                            false
+                        }
+                    }
                 };
 
                 if can_start {
                     // Find a module that's not currently being processed
                     let module_to_process = {
-                        let groups = module_groups.lock().unwrap();
-                        let active = active_modules.lock().unwrap();
+                        let groups = match SafeOperations::lock_with_timeout(
+                            &module_groups,
+                            Duration::from_secs(1),
+                            "module_groups_process"
+                        ) {
+                            Ok(groups) => groups,
+                            Err(_) => {
+                                // If we can't acquire the lock, no module to process
+                                continue;
+                            }
+                        };
+                        
+                        let active = match SafeOperations::lock_with_timeout(
+                            &active_modules,
+                            Duration::from_secs(1),
+                            "active_modules_process"
+                        ) {
+                            Ok(active) => active,
+                            Err(_) => {
+                                // If we can't acquire the lock, no module to process
+                                continue;
+                            }
+                        };
                         
                         groups.iter()
-                            .filter(|(module_path, group)| {
+                            .find(|(module_path, group)| {
                                 !group.is_empty() && !active.contains_key(*module_path)
                             })
-                            .next()
                             .map(|(module_path, _)| module_path.clone())
                     };
 
                     if let Some(module_path) = module_to_process {
                         // Mark this module as active
-                        {
-                            let mut active = active_modules.lock().unwrap();
-                            active.insert(module_path.clone(), true);
-                        }
+                        let mut active = match SafeOperations::lock_with_timeout(
+                            &active_modules,
+                            Duration::from_secs(1),
+                            "active_modules_mark"
+                        ) {
+                            Ok(active) => active,
+                            Err(e) => {
+                                logger::warn(&format!("Failed to acquire active modules lock: {}", e));
+                                continue;
+                            }
+                        };
+                        active.insert(module_path.clone(), true);
 
                         let module_groups = Arc::clone(&module_groups);
                         let results = Arc::clone(&results);
@@ -144,6 +219,7 @@ impl ParallelProcessor {
         });
 
         self.worker_handle = Some(handle);
+        Ok(())
     }
 
     /// Process all operations for a specific module sequentially.
@@ -160,7 +236,18 @@ impl ParallelProcessor {
         loop {
             // Get the next operation for this module
             let operation = {
-                let mut groups = module_groups.lock().unwrap();
+                let mut groups = match SafeOperations::lock_with_timeout(
+                    &module_groups,
+                    Duration::from_secs(5),
+                    "module_groups_take_next"
+                ) {
+                    Ok(groups) => groups,
+                    Err(e) => {
+                        logger::warn(&format!("Failed to acquire module groups lock: {}", e));
+                        break;
+                    }
+                };
+                
                 if let Some(group) = groups.get_mut(&module_path) {
                     group.take_next_operation()
                 } else {
@@ -174,34 +261,65 @@ impl ParallelProcessor {
                 
                 // Store the result
                 {
-                    let mut results = results.lock().unwrap();
+                    let mut results = match SafeOperations::lock_with_timeout(
+                        &results,
+                        Duration::from_secs(5),
+                        "results_push"
+                    ) {
+                        Ok(results) => results,
+                        Err(e) => {
+                            logger::warn(&format!("Failed to acquire results lock: {}", e));
+                            break;
+                        }
+                    };
                     results.push(result);
                 }
             } else {
-                // No more operations for this module
                 break;
             }
         }
 
-        // Mark this module as no longer active
-        {
-            let mut active = active_modules.lock().unwrap();
+        // Mark this module as no longer active (non-blocking cleanup)
+        // If cleanup fails, we continue since it's not critical for operation completion
+        let _ = SafeOperations::lock_with_timeout(
+            &active_modules,
+            Duration::from_millis(100), // Very short timeout for cleanup
+            "active_modules_remove"
+        ).map(|mut active| {
             active.remove(&module_path);
-        }
-        
-        // Note: Individual operation completions are now handled by logger::operation_completion
+        });
     }
 
     /// Wait for all operations to complete and return the results.
-    pub fn wait_for_completion(mut self) -> Vec<OperationResult> {
-        // Wait for the worker thread to finish
+    pub fn wait_for_completion(mut self) -> Result<Vec<OperationResult>, SolarboatError> {
+        // Wait for the worker thread to finish with a timeout
         if let Some(handle) = self.worker_handle.take() {
-            let _ = handle.join();
+            // Use a timeout for joining the worker thread
+            let start_time = std::time::Instant::now();
+            let max_wait_time = Duration::from_secs(60); // 1 minute timeout
+            
+            while start_time.elapsed() < max_wait_time {
+                if handle.is_finished() {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            
+            // Try to join, but don't block indefinitely
+            if !handle.is_finished() {
+                logger::warn("Worker thread did not finish within timeout, proceeding with available results");
+            } else {
+                let _ = handle.join();
+            }
         }
 
         // Return the collected results
-        let results = self.results.lock().unwrap();
-        results.clone()
+        let results = SafeOperations::lock_with_timeout(
+            &self.results,
+            Duration::from_secs(5),
+            "results_clone"
+        )?;
+        Ok(results.clone())
     }
 
     /// Get the parallel limit (for testing purposes).
@@ -233,10 +351,7 @@ impl ParallelProcessor {
                 Err(_) => false,
             }
         } else {
-            match crate::utils::terraform_background::run_terraform_silent("init", &[], module_path, None) {
-                Ok(success) => success,
-                Err(_) => false,
-            }
+            crate::utils::terraform_background::run_terraform_silent("init", &[], module_path, None).unwrap_or(false)
         };
 
         if !init_success {
@@ -283,19 +398,24 @@ impl ParallelProcessor {
                                         logger::operation_completion(module_path, workspace.as_deref(), true);
                                         // Save plan output if plan_dir is specified
                                         if let Some(plan_dir) = plan_dir {
-                                            if let Err(e) = save_plan_output(module_path, plan_dir, workspace.as_deref(), &background_tf.get_output()) {
-                                                println!("  ⚠️  Failed to save plan output: {}", e);
+                                            if let Ok(output) = background_tf.get_output() {
+                                                if let Err(e) = save_plan_output(module_path, plan_dir, workspace.as_deref(), &output) {
+                                                    println!("  ⚠️  Failed to save plan output: {}", e);
+                                                }
                                             }
                                         }
-                                        (true, None, background_tf.get_output())
+                                        let output = background_tf.get_output().unwrap_or_else(|_| Vec::new());
+                                        (true, None, output)
                                     } else {
                                         logger::operation_completion(module_path, workspace.as_deref(), false);
-                                        (false, Some("Plan failed".to_string()), background_tf.get_output())
+                                        let output = background_tf.get_output().unwrap_or_else(|_| Vec::new());
+                                        (false, Some("Plan failed".to_string()), output)
                                     }
                                 }
                                 Err(e) => {
                                     logger::operation_completion(module_path, workspace.as_deref(), false);
-                                    (false, Some(format!("Plan failed: {}", e)), background_tf.get_output())
+                                    let output = background_tf.get_output().unwrap_or_else(|_| Vec::new());
+                                    (false, Some(format!("Plan failed: {}", e)), output)
                                 }
                             }
                         }
@@ -333,15 +453,18 @@ impl ParallelProcessor {
                                 Ok(success) => {
                                     if success {
                                         logger::operation_completion(module_path, workspace.as_deref(), true);
-                                        (true, None, background_tf.get_output())
+                                        let output = background_tf.get_output().unwrap_or_else(|_| Vec::new());
+                                        (true, None, output)
                                     } else {
                                         logger::operation_completion(module_path, workspace.as_deref(), false);
-                                        (false, Some("Apply failed".to_string()), background_tf.get_output())
+                                        let output = background_tf.get_output().unwrap_or_else(|_| Vec::new());
+                                        (false, Some("Apply failed".to_string()), output)
                                     }
                                 }
                                 Err(e) => {
                                     logger::operation_completion(module_path, workspace.as_deref(), false);
-                                    (false, Some(format!("Apply failed: {}", e)), background_tf.get_output())
+                                    let output = background_tf.get_output().unwrap_or_else(|_| Vec::new());
+                                    (false, Some(format!("Apply failed: {}", e)), output)
                                 }
                             }
                         }

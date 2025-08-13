@@ -10,6 +10,15 @@ pub struct ResolvedModuleConfig {
     pub var_files: Vec<String>,
 }
 
+impl Default for ResolvedModuleConfig {
+    fn default() -> Self {
+        Self {
+            ignore_workspaces: Vec::new(),
+            var_files: Vec::new(),
+        }
+    }
+}
+
 /// Configuration resolver that merges CLI arguments with configuration file settings
 pub struct ConfigResolver {
     /// The base configuration loaded from file
@@ -24,21 +33,16 @@ impl ConfigResolver {
         Self { config, config_dir }
     }
     
-    /// Resolve configuration for a specific module
+    /// Resolve module configuration with proper precedence
     pub fn resolve_module_config(
         &self,
         module_path: &str,
         cli_ignore_workspaces: Option<&[String]>,
-        cli_var_files: Option<&[String]>,
     ) -> ResolvedModuleConfig {
-        let mut resolved = ResolvedModuleConfig {
-            ignore_workspaces: Vec::new(),
-            var_files: Vec::new(),
-        };
-        
-        // Get module-specific and global configurations
         let module_config = self.get_module_config(module_path);
         let global_config = self.get_global_config();
+        
+        let mut resolved = ResolvedModuleConfig::default();
         
         // Resolve ignore workspaces (CLI > module > global)
         resolved.ignore_workspaces = self.resolve_ignore_workspaces(
@@ -47,12 +51,8 @@ impl ConfigResolver {
             &global_config.ignore_workspaces,
         );
         
-        // Resolve general var files (CLI > module > global)
-        resolved.var_files = self.resolve_var_files(
-            cli_var_files,
-            &module_config.var_files,
-            &global_config.var_files,
-        );
+        // Note: var_files field has been removed, only workspace_var_files are used now
+        resolved.var_files = Vec::new(); // Empty since var_files field is deprecated
         
         resolved
     }
@@ -66,16 +66,10 @@ impl ConfigResolver {
     ) -> Vec<String> {
         let mut var_files = Vec::new();
         
-        // Start with general var files
-        let module_config = self.get_module_config(module_path);
-        let global_config = self.get_global_config();
-        
-        let general_var_files = self.resolve_var_files(
-            cli_var_files,
-            &module_config.var_files,
-            &global_config.var_files,
-        );
-        var_files.extend(general_var_files);
+        // Start with CLI var files if provided
+        if let Some(cli_var_files) = cli_var_files {
+            var_files.extend(cli_var_files.to_vec());
+        }
         
         // Add workspace-specific var files
         let workspace_var_files = self.resolve_workspace_var_files(
@@ -109,27 +103,6 @@ impl ConfigResolver {
         
         // Fall back to global
         global_ignore.to_vec()
-    }
-    
-    /// Resolve var files with proper precedence
-    fn resolve_var_files(
-        &self,
-        cli_var_files: Option<&[String]>,
-        module_var_files: &[String],
-        global_var_files: &[String],
-    ) -> Vec<String> {
-        // CLI arguments override everything
-        if let Some(cli_var_files) = cli_var_files {
-            return cli_var_files.to_vec();
-        }
-        
-        // Module-specific overrides global
-        if !module_var_files.is_empty() {
-            return module_var_files.to_vec();
-        }
-        
-        // Fall back to global
-        global_var_files.to_vec()
     }
     
     /// Resolve workspace-specific var files
@@ -208,7 +181,7 @@ impl ConfigResolver {
         workspace: &str,
         cli_ignore_workspaces: Option<&[String]>,
     ) -> bool {
-        let resolved_config = self.resolve_module_config(module_path, cli_ignore_workspaces, None);
+        let resolved_config = self.resolve_module_config(module_path, cli_ignore_workspaces);
         resolved_config.ignore_workspaces.contains(&workspace.to_string())
     }
 }
@@ -236,7 +209,6 @@ mod tests {
             "infrastructure/networking".to_string(),
             ModuleConfig {
                 ignore_workspaces: vec!["dev".to_string()],
-                var_files: vec!["networking.tfvars".to_string()],
                 workspace_var_files: Some(module_workspace_files),
             },
         );
@@ -244,7 +216,6 @@ mod tests {
         SolarboatConfig {
             global: GlobalConfig {
                 ignore_workspaces: vec!["test".to_string()],
-                var_files: vec!["global.tfvars".to_string()],
                 workspace_var_files: Some(global_workspace_files),
             },
             modules,
@@ -259,11 +230,10 @@ mod tests {
         let resolved = resolver.resolve_module_config(
             "infrastructure/networking",
             None,
-            None,
         );
         
         assert_eq!(resolved.ignore_workspaces, vec!["dev"]);
-        assert_eq!(resolved.var_files, vec!["networking.tfvars"]);
+        assert_eq!(resolved.var_files, Vec::<String>::new()); // var_files is now empty
     }
     
     #[test]
@@ -274,11 +244,10 @@ mod tests {
         let resolved = resolver.resolve_module_config(
             "infrastructure/networking",
             Some(&["cli-ignore".to_string()]),
-            Some(&["cli-var.tfvars".to_string()]),
         );
         
         assert_eq!(resolved.ignore_workspaces, vec!["cli-ignore"]);
-        assert_eq!(resolved.var_files, vec!["cli-var.tfvars"]);
+        assert_eq!(resolved.var_files, Vec::<String>::new()); // var_files is now empty
     }
     
     #[test]
@@ -292,8 +261,7 @@ mod tests {
             None,
         );
         
-        // Should include both general and workspace-specific files, resolved relative to module directory
-        assert!(var_files.contains(&"/tmp/infrastructure/networking/networking.tfvars".to_string()));
+        // Should include workspace-specific files, resolved relative to module directory
         assert!(var_files.contains(&"/tmp/infrastructure/networking/module-prod.tfvars".to_string()));
     }
     

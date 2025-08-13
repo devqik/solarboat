@@ -70,7 +70,7 @@ pub fn run_terraform_apply(
                 watch,
                 skip_init: true, // Already initialized before workspace listing
             };
-            processor.add_operation(operation);
+            processor.add_operation(operation).map_err(|e| format!("Failed to add operation: {}", e))?;
         } else {
             logger::workspace_discovery(&workspaces);
             
@@ -98,17 +98,17 @@ pub fn run_terraform_apply(
                     watch,
                     skip_init: true, // Already initialized before workspace listing
                 };
-                processor.add_operation(operation);
+                processor.add_operation(operation).map_err(|e| format!("Failed to add operation: {}", e))?;
             }
         }
     }
     
     // Start processing
     logger::parallel_processing_start(parallel_limit);
-    processor.start();
+    processor.start().map_err(|e| format!("Failed to start processor: {}", e))?;
     
     // Wait for completion and collect results
-    let results = processor.wait_for_completion();
+    let results = processor.wait_for_completion().map_err(|e| format!("Failed to wait for completion: {}", e))?;
     let total_count = results.len();
     
     // Process results and report failures

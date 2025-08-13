@@ -113,7 +113,7 @@ impl ConfigLoader {
         }
         
         // Validate var file paths
-        self.validate_var_files(&config.global.var_files, "global", &mut validation_warnings)?;
+        // Note: var_files field has been removed, only workspace_var_files are validated now
         
         if let Some(workspace_files) = &config.global.workspace_var_files {
             for (workspace, files) in &workspace_files.workspaces {
@@ -122,7 +122,7 @@ impl ConfigLoader {
         }
         
         for (module_path, module_config) in &config.modules {
-            self.validate_var_files(&module_config.var_files, &format!("module '{}'", module_path), &mut validation_warnings)?;
+            // Note: var_files field has been removed, only workspace_var_files are validated now
             
             if let Some(workspace_files) = &module_config.workspace_var_files {
                 for (workspace, files) in &workspace_files.workspaces {
@@ -228,12 +228,16 @@ mod tests {
         let config_content = r#"{
             "global": {
                 "ignore_workspaces": ["dev", "test"],
-                "var_files": ["global.tfvars"]
+                "workspace_var_files": {
+                    "default": ["global.tfvars"]
+                }
             },
             "modules": {
                 "infrastructure/networking": {
                     "ignore_workspaces": ["dev"],
-                    "var_files": ["networking.tfvars"]
+                    "workspace_var_files": {
+                        "default": ["networking.tfvars"]
+                    }
                 }
             }
         }"#;
@@ -244,7 +248,8 @@ mod tests {
         let config = loader.load().unwrap().unwrap();
         
         assert_eq!(config.global.ignore_workspaces, vec!["dev", "test"]);
-        assert_eq!(config.global.var_files, vec!["global.tfvars"]);
+        // Note: var_files field has been removed
+        assert!(config.global.workspace_var_files.is_some());
         assert!(config.modules.contains_key("infrastructure/networking"));
     }
     
@@ -256,8 +261,9 @@ global:
   ignore_workspaces:
     - dev
     - test
-  var_files:
-    - global.tfvars
+  workspace_var_files:
+    default:
+      - global.tfvars
 "#;
         
         fs::write(temp_dir.path().join("solarboat.yml"), config_content).unwrap();

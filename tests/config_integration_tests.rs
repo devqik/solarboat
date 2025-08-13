@@ -3,12 +3,11 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
-fn test_basic_config_loading() {
+fn test_global_config() {
     let temp_dir = TempDir::new().unwrap();
     let config_content = r#"{
         "global": {
             "ignore_workspaces": ["dev", "test"],
-            "var_files": ["global.tfvars"],
             "workspace_var_files": {
                 "prod": ["prod.tfvars"]
             }
@@ -22,7 +21,7 @@ fn test_basic_config_loading() {
     let config = loader.load().unwrap().unwrap();
     
     assert_eq!(config.global.ignore_workspaces, vec!["dev", "test"]);
-    assert_eq!(config.global.var_files, vec!["global.tfvars"]);
+    // Note: var_files field has been removed
     assert_eq!(
         config.global.workspace_var_files.as_ref().unwrap().workspaces["prod"],
         vec!["prod.tfvars"]
@@ -34,13 +33,11 @@ fn test_module_specific_config() {
     let temp_dir = TempDir::new().unwrap();
     let config_content = r#"{
         "global": {
-            "ignore_workspaces": ["dev"],
-            "var_files": ["global.tfvars"]
+            "ignore_workspaces": ["dev"]
         },
         "modules": {
             "infrastructure/networking": {
                 "ignore_workspaces": ["test"],
-                "var_files": ["networking.tfvars"],
                 "workspace_var_files": {
                     "prod": ["networking-prod.tfvars"]
                 }
@@ -56,7 +53,7 @@ fn test_module_specific_config() {
     
     let module_config = &config.modules["infrastructure/networking"];
     assert_eq!(module_config.ignore_workspaces, vec!["test"]);
-    assert_eq!(module_config.var_files, vec!["networking.tfvars"]);
+    // Note: var_files field has been removed
     assert_eq!(
         module_config.workspace_var_files.as_ref().unwrap().workspaces["prod"],
         vec!["networking-prod.tfvars"]
@@ -69,7 +66,6 @@ fn test_config_resolver_precedence() {
     let config_content = r#"{
         "global": {
             "ignore_workspaces": ["dev"],
-            "var_files": ["global.tfvars"],
             "workspace_var_files": {
                 "prod": ["global-prod.tfvars"]
             }
@@ -77,7 +73,6 @@ fn test_config_resolver_precedence() {
         "modules": {
             "infrastructure/networking": {
                 "ignore_workspaces": ["test"],
-                "var_files": ["networking.tfvars"],
                 "workspace_var_files": {
                     "prod": ["networking-prod.tfvars"]
                 }
@@ -93,51 +88,46 @@ fn test_config_resolver_precedence() {
     let resolver = ConfigResolver::new(Some(config), temp_dir.path().to_path_buf());
     
     // Test module-specific settings override global
-    let module_settings = resolver.resolve_module_config("infrastructure/networking", None, None);
+    let module_settings = resolver.resolve_module_config("infrastructure/networking", None);
     assert_eq!(module_settings.ignore_workspaces, vec!["test"]);
-    assert_eq!(module_settings.var_files, vec!["networking.tfvars"]);
     
-    // Test workspace-specific var files (should include both general and workspace-specific, as absolute paths)
+    // Test workspace-specific var files (should include workspace-specific files, as absolute paths)
     let workspace_vars = resolver.get_workspace_var_files("infrastructure/networking", "prod", None);
     assert_eq!(
         workspace_vars,
         vec![
-            temp_dir.path().join("infrastructure/networking/networking.tfvars").to_string_lossy().to_string(),
             temp_dir.path().join("infrastructure/networking/networking-prod.tfvars").to_string_lossy().to_string()
         ]
     );
     
     // Test fallback to global for non-existent module
-    let fallback_settings = resolver.resolve_module_config("other/module", None, None);
+    let fallback_settings = resolver.resolve_module_config("other/module", None);
     assert_eq!(fallback_settings.ignore_workspaces, vec!["dev"]);
-    assert_eq!(fallback_settings.var_files, vec!["global.tfvars"]);
+    assert_eq!(fallback_settings.var_files, Vec::<String>::new()); // var_files is now empty
     
     let fallback_vars = resolver.get_workspace_var_files("other/module", "prod", None);
     assert_eq!(
         fallback_vars,
         vec![
-            temp_dir.path().join("other/module/global.tfvars").to_string_lossy().to_string(),
             temp_dir.path().join("other/module/global-prod.tfvars").to_string_lossy().to_string()
         ]
     );
 }
 
 #[test]
-fn test_environment_specific_config() {
+fn test_environment_config() {
     let temp_dir = TempDir::new().unwrap();
     
-    // Create environment-specific config
+    // Create environment-specific configs
     let dev_config = r#"{
         "global": {
-            "ignore_workspaces": ["prod", "staging"],
-            "var_files": ["dev.tfvars"]
+            "ignore_workspaces": ["prod", "staging"]
         }
     }"#;
     
     let prod_config = r#"{
         "global": {
-            "ignore_workspaces": ["dev", "test"],
-            "var_files": ["prod.tfvars"]
+            "ignore_workspaces": ["dev", "test"]
         }
     }"#;
     
@@ -149,14 +139,14 @@ fn test_environment_specific_config() {
     let loader = ConfigLoader::new(temp_dir.path());
     let config = loader.load().unwrap().unwrap();
     assert_eq!(config.global.ignore_workspaces, vec!["prod", "staging"]);
-    assert_eq!(config.global.var_files, vec!["dev.tfvars"]);
+    // Note: var_files field has been removed
     
     // Test prod environment
     std::env::set_var("SOLARBOAT_ENV", "prod");
     let loader = ConfigLoader::new(temp_dir.path());
     let config = loader.load().unwrap().unwrap();
     assert_eq!(config.global.ignore_workspaces, vec!["dev", "test"]);
-    assert_eq!(config.global.var_files, vec!["prod.tfvars"]);
+    // Note: var_files field has been removed
     
     // Clean up environment variable
     std::env::remove_var("SOLARBOAT_ENV");
@@ -169,8 +159,7 @@ fn test_environment_config_fallback() {
     // Create only default config
     let default_config = r#"{
         "global": {
-            "ignore_workspaces": ["default"],
-            "var_files": ["default.tfvars"]
+            "ignore_workspaces": ["default"]
         }
     }"#;
     
@@ -181,7 +170,7 @@ fn test_environment_config_fallback() {
     let loader = ConfigLoader::new(temp_dir.path());
     let config = loader.load().unwrap().unwrap();
     assert_eq!(config.global.ignore_workspaces, vec!["default"]);
-    assert_eq!(config.global.var_files, vec!["default.tfvars"]);
+    // Note: var_files field has been removed
     
     // Clean up environment variable
     std::env::remove_var("SOLARBOAT_ENV");
@@ -195,14 +184,13 @@ fn test_config_validation() {
     let config_content = r#"{
         "global": {
             "ignore_workspaces": ["dev"],
-            "var_files": ["nonexistent.tfvars"],
             "workspace_var_files": {
                 "default": ["default.tfvars"]
             }
         },
         "modules": {
             "nonexistent/module": {
-                "var_files": ["module.tfvars"]
+                "ignore_workspaces": ["test"]
             }
         }
     }"#;
@@ -248,10 +236,12 @@ fn test_config_with_absolute_paths() {
     let temp_dir = TempDir::new().unwrap();
     let config_content = format!(r#"{{
         "global": {{
-            "var_files": [
-                "relative.tfvars",
-                "{}/absolute.tfvars"
-            ]
+            "workspace_var_files": {{
+                "default": [
+                    "relative.tfvars",
+                    "{}/absolute.tfvars"
+                ]
+            }}
         }}
     }}"#, temp_dir.path().display());
     
@@ -265,9 +255,12 @@ fn test_config_with_absolute_paths() {
     let loader = ConfigLoader::new(temp_dir.path());
     let config = loader.load().unwrap().unwrap();
     
-    assert_eq!(config.global.var_files.len(), 2);
-    assert!(config.global.var_files.contains(&"relative.tfvars".to_string()));
-    assert!(config.global.var_files.contains(&format!("{}/absolute.tfvars", temp_dir.path().display())));
+    // Note: var_files field has been removed, testing workspace_var_files instead
+    assert!(config.global.workspace_var_files.is_some());
+    let workspace_files = config.global.workspace_var_files.as_ref().unwrap();
+    assert_eq!(workspace_files.workspaces["default"].len(), 2);
+    assert!(workspace_files.workspaces["default"].contains(&"relative.tfvars".to_string()));
+    assert!(workspace_files.workspaces["default"].contains(&format!("{}/absolute.tfvars", temp_dir.path().display())));
 }
 
 #[test]
@@ -275,14 +268,12 @@ fn test_workspace_var_files_merging() {
     let temp_dir = TempDir::new().unwrap();
     let config_content = r#"{
         "global": {
-            "var_files": ["global.tfvars"],
             "workspace_var_files": {
                 "prod": ["global-prod.tfvars"]
             }
         },
         "modules": {
             "infrastructure/networking": {
-                "var_files": ["networking.tfvars"],
                 "workspace_var_files": {
                     "prod": ["networking-prod.tfvars"]
                 }
@@ -297,12 +288,11 @@ fn test_workspace_var_files_merging() {
     let config = loader.load().unwrap().unwrap();
     let resolver = ConfigResolver::new(Some(config), temp_dir.path().to_path_buf());
     
-    // Test that both general and workspace-specific var files are included (as absolute paths)
+    // Test that workspace-specific var files are included (as absolute paths)
     let all_vars = resolver.get_workspace_var_files("infrastructure/networking", "prod", None);
     assert_eq!(
         all_vars,
         vec![
-            temp_dir.path().join("infrastructure/networking/networking.tfvars").to_string_lossy().to_string(),
             temp_dir.path().join("infrastructure/networking/networking-prod.tfvars").to_string_lossy().to_string()
         ]
     );
@@ -312,7 +302,6 @@ fn test_workspace_var_files_merging() {
     assert_eq!(
         fallback_vars,
         vec![
-            temp_dir.path().join("other/module/global.tfvars").to_string_lossy().to_string(),
             temp_dir.path().join("other/module/global-prod.tfvars").to_string_lossy().to_string()
         ]
     );
@@ -331,7 +320,7 @@ fn test_empty_config() {
     
     // Should have default values
     assert!(config.global.ignore_workspaces.is_empty());
-    assert!(config.global.var_files.is_empty());
+    // Note: var_files field has been removed
     assert!(config.global.workspace_var_files.is_none());
     assert!(config.modules.is_empty());
 } 

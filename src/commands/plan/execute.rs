@@ -83,9 +83,8 @@ pub fn execute(args: PlanArgs, settings: &Settings) -> anyhow::Result<()> {
                 modules.into_iter()
                     .filter(|path| {
                         // Check if the path contains the root_dir
-                        let contains_path = path.contains(&format!("/{}/", args.path)) || 
-                                           path.ends_with(&format!("/{}", args.path));
-                        contains_path
+                        path.contains(&format!("/{}/", args.path)) || 
+                        path.ends_with(&format!("/{}", args.path))
                     })
                     .collect::<Vec<String>>()
             } else {

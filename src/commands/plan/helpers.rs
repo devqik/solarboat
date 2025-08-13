@@ -8,7 +8,6 @@ use std::process::Command;
 #[derive(Debug)]
 pub struct ModuleError {
     path: String,
-    command: String,
     error: String,
 }
 
@@ -66,7 +65,7 @@ pub fn run_terraform_plan(
                 watch,
                 skip_init: true, // Already initialized before workspace listing
             };
-            processor.add_operation(operation);
+            processor.add_operation(operation).map_err(|e| format!("Failed to add operation: {}", e))?;
         } else {
             // Multiple workspaces
             logger::workspace_discovery(&workspaces);
@@ -97,17 +96,17 @@ pub fn run_terraform_plan(
                     watch,
                     skip_init: true, // Already initialized before workspace listing
                 };
-                processor.add_operation(operation);
+                processor.add_operation(operation).map_err(|e| format!("Failed to add operation: {}", e))?;
             }
         }
     }
     
     // Start processing
     logger::parallel_processing_start(parallel_limit);
-    processor.start();
+    processor.start().map_err(|e| format!("Failed to start processor: {}", e))?;
     
     // Wait for completion and collect results
-    let results = processor.wait_for_completion();
+    let results = processor.wait_for_completion().map_err(|e| format!("Failed to wait for completion: {}", e))?;
     
     // Process results and report failures
     let mut failed_modules = Vec::new();
@@ -121,7 +120,6 @@ pub fn run_terraform_plan(
             
             failed_modules.push(ModuleError {
                 path: module_path,
-                command: "plan".to_string(),
                 error: result.error.unwrap_or_else(|| "Unknown error".to_string()),
             });
         }
@@ -130,7 +128,7 @@ pub fn run_terraform_plan(
     if !failed_modules.is_empty() {
         println!("\n⚠️  Some modules failed to process:");
         for failure in &failed_modules {
-            println!("  ❌ {}: {} failed - {}", failure.path, failure.command, failure.error);
+            println!("  ❌ {}: plan failed - {}", failure.path, failure.error);
         }
         return Err(format!("Failed to process {} module(s)", failed_modules.len()));
     }

@@ -84,9 +84,8 @@ pub fn execute(args: ApplyArgs, settings: &Settings) -> anyhow::Result<()> {
                 modules.into_iter()
                     .filter(|path| {
                         // Check if the path contains the root_dir
-                        let contains_path = path.contains(&format!("/{}/", args.path)) || 
-                                           path.ends_with(&format!("/{}", args.path));
-                        contains_path
+                        path.contains(&format!("/{}/", args.path)) || 
+                        path.ends_with(&format!("/{}", args.path))
                     })
                     .collect::<Vec<String>>()
             } else {
@@ -132,7 +131,7 @@ pub fn execute(args: ApplyArgs, settings: &Settings) -> anyhow::Result<()> {
                     ]);
                 }
                 Err(e) => {
-                    logger::error_box("Apply Failed", &format!("{}", e));
+                    logger::error_box("Apply Failed", &e.to_string());
                     return Err(anyhow::anyhow!("{}", e));
                 }
             }
