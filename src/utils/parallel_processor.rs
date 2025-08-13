@@ -121,6 +121,7 @@ impl ParallelProcessor {
                         Ok(active) => active,
                         Err(e) => {
                             logger::warn(&format!("Failed to acquire active modules lock: {}", e));
+                            // If we can't check, assume we're done to prevent hanging
                             break;
                         }
                     };
@@ -128,6 +129,28 @@ impl ParallelProcessor {
                     if active.is_empty() {
                         break;
                     }
+                    
+                    // Check if any active modules still have operations to process
+                    let any_remaining_ops = {
+                        match SafeOperations::lock_with_timeout(
+                            &module_groups,
+                            Duration::from_secs(1),
+                            "module_groups_check_remaining"
+                        ) {
+                            Ok(groups) => groups.values().any(|group| !group.is_empty()),
+                            Err(_) => {
+                                // If we can't check, assume no remaining operations
+                                false
+                            }
+                        }
+                    };
+                    
+                    if !any_remaining_ops {
+                        // No more operations to process, we can exit even if cleanup didn't complete
+                        logger::info("All operations completed, exiting worker thread");
+                        break;
+                    }
+                    
                     thread::sleep(Duration::from_millis(100));
                     continue;
                 }
@@ -280,14 +303,13 @@ impl ParallelProcessor {
         }
 
         // Mark this module as no longer active (non-blocking cleanup)
-        // If cleanup fails, we continue since it's not critical for operation completion
-        let _ = SafeOperations::lock_with_timeout(
-            &active_modules,
-            Duration::from_millis(100), // Very short timeout for cleanup
-            "active_modules_remove"
-        ).map(|mut active| {
+        // Use try_lock to avoid blocking, and if it fails, just log and continue
+        if let Ok(mut active) = active_modules.try_lock() {
             active.remove(&module_path);
-        });
+        } else {
+            // Cleanup failed, but that's okay - the worker thread will handle it
+            logger::debug(&format!("Cleanup for module {} skipped (lock busy)", module_path));
+        }
     }
 
     /// Wait for all operations to complete and return the results.
