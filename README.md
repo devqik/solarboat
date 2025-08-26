@@ -4,7 +4,7 @@
 [![Crates.io](https://img.shields.io/crates/v/solarboat)](https://crates.io/crates/solarboat)
 [![Website](https://img.shields.io/website?url=https://solarboat.io)](https://solarboat.io)
 
-> Built with love for Rust and infrastructure automation by [devqik](https://devqik.com)
+> Built with love for Rust and infrastructure automation by [Youssef Hussein (@devqik)](https://devqik.com)
 
 Solarboat is a modern CLI for Infrastructure as Code (IaC) and GitOps workflows, providing intelligent Terraform operations, automatic dependency detection, and seamless stateful/stateless module handling.
 
@@ -460,4 +460,4 @@ This project needs your support! If you find Solarboat CLI useful, please consid
 
 Your support will help make this project better and encourage its continued development.
 
-~ [@devqik](https://devqik.com) (Creator)
+~ [Youssef Hussein (@devqik](https://devqik.com) (Creator)
