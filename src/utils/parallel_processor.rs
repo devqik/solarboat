@@ -69,7 +69,7 @@ impl ParallelProcessor {
         let module_path = operation.module_path.clone();
         
         groups.entry(module_path.clone())
-            .or_insert_with(|| ModuleGroup::new(module_path))
+            .or_insert_with(|| ModuleGroup::new(module_path.clone()))
             .add_operation(operation);
         
         Ok(())
@@ -356,12 +356,10 @@ impl ParallelProcessor {
         let var_files = &operation.var_files;
         let operation_type = &operation.operation_type;
         let watch = operation.watch;
-        let skip_init = operation.skip_init;
+        let _skip_init = operation.skip_init; // No longer used, but kept for compatibility
 
-        // Initialize module if needed and not already done
-        let init_success = if skip_init {
-            true // Skip initialization since it was already done
-        } else if watch {
+        // Always ensure module is initialized before operations
+        let init_success = if watch {
             let mut background_tf = BackgroundTerraform::new();
             match background_tf.init_background(module_path) {
                 Ok(_) => {
@@ -373,7 +371,11 @@ impl ParallelProcessor {
                 Err(_) => false,
             }
         } else {
-            crate::utils::terraform_background::run_terraform_silent("init", &[], module_path, None).unwrap_or(false)
+            // Use the terraform_operations::ensure_module_initialized function
+            match crate::utils::terraform_operations::ensure_module_initialized(module_path) {
+                Ok(_) => true,
+                Err(_) => false,
+            }
         };
 
         if !init_success {
@@ -525,3 +527,5 @@ impl ParallelProcessor {
         }
     }
 } 
+
+

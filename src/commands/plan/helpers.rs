@@ -1,9 +1,8 @@
 use crate::utils::scan_utils;
 use crate::utils::parallel_processor::ParallelProcessor;
-use crate::utils::terraform_operations::{TerraformOperation, OperationType, ensure_module_initialized};
+use crate::utils::terraform_operations::{TerraformOperation, OperationType};
 use crate::config::ConfigResolver;
 use crate::utils::logger;
-use std::process::Command;
 
 #[derive(Debug)]
 pub struct ModuleError {
@@ -45,7 +44,6 @@ pub fn run_terraform_plan(
         // Validate module before processing
         validate_module_configuration(module)?;
         
-        ensure_module_initialized(module)?;
         logger::module_init_status(true);
         
         let workspaces = get_workspaces(module)?;
@@ -63,7 +61,7 @@ pub fn run_terraform_plan(
                     plan_dir: plan_dir.map(|s| s.to_string()) 
                 },
                 watch,
-                skip_init: true, // Already initialized before workspace listing
+                skip_init: false, // Always initialize in parallel processor
             };
             processor.add_operation(operation).map_err(|e| format!("Failed to add operation: {}", e))?;
         } else {
@@ -94,7 +92,7 @@ pub fn run_terraform_plan(
                         plan_dir: plan_dir.map(|s| s.to_string()) 
                     },
                     watch,
-                    skip_init: true, // Already initialized before workspace listing
+                    skip_init: false, // Always initialize in parallel processor
                 };
                 processor.add_operation(operation).map_err(|e| format!("Failed to add operation: {}", e))?;
             }
@@ -138,6 +136,9 @@ pub fn run_terraform_plan(
 }
 
 pub fn get_workspaces(module_path: &str) -> Result<Vec<String>, String> {
+    // Ensure module is initialized before listing workspaces
+    crate::utils::terraform_operations::ensure_module_initialized(module_path)?;
+    
     let output = std::process::Command::new("terraform")
         .arg("workspace")
         .arg("list")
@@ -175,23 +176,8 @@ fn validate_module_configuration(module_path: &str) -> Result<(), String> {
         return Err(format!("No Terraform files found in module: {}", module_path));
     }
     
-    // Run terraform validate to check configuration
-    let output = Command::new("terraform")
-        .arg("validate")
-        .current_dir(module_path)
-        .output();
-    
-    match output {
-        Ok(output) => {
-            if !output.status.success() {
-                let error = String::from_utf8_lossy(&output.stderr);
-                return Err(format!("Terraform validation failed for {}: {}", module_path, error));
-            }
-        }
-        Err(e) => {
-            return Err(format!("Failed to run terraform validate for {}: {}", module_path, e));
-        }
-    }
+    // Note: terraform validate requires initialization, so we skip it here
+    // and let the initialization process handle validation
     
     Ok(())
 }

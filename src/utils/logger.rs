@@ -457,14 +457,39 @@ impl Logger {
             return;
         }
         
-        // Calculate the maximum width needed for the box
-        let max_width = title.len().max(message.len()).max(20);
+        const MAX_BOX_WIDTH: usize = 100;
+        
+        // Prepare wrapped lines
+        let mut lines: Vec<String> = Vec::new();
+        for raw_line in message.split('\n') {
+            let mut line = raw_line.trim_end();
+            while line.len() > MAX_BOX_WIDTH {
+                let split_at = line.char_indices()
+                    .take_while(|(idx, _)| *idx <= MAX_BOX_WIDTH)
+                    .map(|(idx, _)| idx)
+                    .last()
+                    .unwrap_or(MAX_BOX_WIDTH);
+                lines.push(line[..split_at].to_string());
+                line = &line[split_at..];
+            }
+            if !line.is_empty() {
+                lines.push(line.to_string());
+            }
+        }
+        if lines.is_empty() {
+            lines.push(String::new());
+        }
+        
+        let content_max = lines.iter().map(|l| l.len()).max().unwrap_or(0);
+        let max_width = title.len().max(content_max).max(20).min(MAX_BOX_WIDTH);
         let border = "─".repeat(max_width + 2);
         
         println!("\n┌{}┐", border.yellow());
         println!("│ {:<width$} │", title.yellow().bold(), width = max_width);
         println!("├{}┤", border.yellow());
-        println!("│ {:<width$} │", message, width = max_width);
+        for l in &lines {
+            println!("│ {:<width$} │", l, width = max_width);
+        }
         println!("└{}┘", border.yellow());
     }
 
@@ -474,14 +499,39 @@ impl Logger {
             return;
         }
         
-        // Calculate the maximum width needed for the box
-        let max_width = title.len().max(message.len()).max(20);
+        const MAX_BOX_WIDTH: usize = 100;
+        
+        // Prepare wrapped lines
+        let mut lines: Vec<String> = Vec::new();
+        for raw_line in message.split('\n') {
+            let mut line = raw_line.trim_end();
+            while line.len() > MAX_BOX_WIDTH {
+                let split_at = line.char_indices()
+                    .take_while(|(idx, _)| *idx <= MAX_BOX_WIDTH)
+                    .map(|(idx, _)| idx)
+                    .last()
+                    .unwrap_or(MAX_BOX_WIDTH);
+                lines.push(line[..split_at].to_string());
+                line = &line[split_at..];
+            }
+            if !line.is_empty() {
+                lines.push(line.to_string());
+            }
+        }
+        if lines.is_empty() {
+            lines.push(String::new());
+        }
+        
+        let content_max = lines.iter().map(|l| l.len()).max().unwrap_or(0);
+        let max_width = title.len().max(content_max).max(20).min(MAX_BOX_WIDTH);
         let border = "─".repeat(max_width + 2);
         
         eprintln!("\n┌{}┐", border.red());
         eprintln!("│ {:<width$} │", title.red().bold(), width = max_width);
         eprintln!("├{}┤", border.red());
-        eprintln!("│ {:<width$} │", message, width = max_width);
+        for l in &lines {
+            eprintln!("│ {:<width$} │", l, width = max_width);
+        }
         eprintln!("└{}┘", border.red());
     }
 
@@ -491,14 +541,39 @@ impl Logger {
             return;
         }
         
-        // Calculate the maximum width needed for the box
-        let max_width = title.len().max(message.len()).max(20);
+        const MAX_BOX_WIDTH: usize = 100;
+        
+        // Prepare wrapped lines
+        let mut lines: Vec<String> = Vec::new();
+        for raw_line in message.split('\n') {
+            let mut line = raw_line.trim_end();
+            while line.len() > MAX_BOX_WIDTH {
+                let split_at = line.char_indices()
+                    .take_while(|(idx, _)| *idx <= MAX_BOX_WIDTH)
+                    .map(|(idx, _)| idx)
+                    .last()
+                    .unwrap_or(MAX_BOX_WIDTH);
+                lines.push(line[..split_at].to_string());
+                line = &line[split_at..];
+            }
+            if !line.is_empty() {
+                lines.push(line.to_string());
+            }
+        }
+        if lines.is_empty() {
+            lines.push(String::new());
+        }
+        
+        let content_max = lines.iter().map(|l| l.len()).max().unwrap_or(0);
+        let max_width = title.len().max(content_max).max(20).min(MAX_BOX_WIDTH);
         let border = "─".repeat(max_width + 2);
         
         println!("\n┌{}┐", border.green());
         println!("│ {:<width$} │", title.green().bold(), width = max_width);
         println!("├{}┤", border.green());
-        println!("│ {:<width$} │", message, width = max_width);
+        for l in &lines {
+            println!("│ {:<width$} │", l, width = max_width);
+        }
         println!("└{}┘", border.green());
     }
 
