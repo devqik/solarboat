@@ -67,10 +67,18 @@ impl ParallelProcessor {
         )?;
         
         let module_path = operation.module_path.clone();
+        let workspace = operation.workspace.as_deref().unwrap_or("default");
+        
+        logger::debug(&format!("Adding operation: module={}, workspace={}", module_path, workspace));
         
         groups.entry(module_path.clone())
             .or_insert_with(|| ModuleGroup::new(module_path.clone()))
             .add_operation(operation);
+        
+        logger::debug(&format!("Operation added. Total groups: {}, operations in group: {}", 
+            groups.len(), 
+            groups.get(&module_path).map(|g| g.operations.len()).unwrap_or(0)
+        ));
         
         Ok(())
     }
@@ -108,10 +116,14 @@ impl ParallelProcessor {
                             break;
                         }
                     };
-                    groups.values().any(|group| !group.is_empty())
+                    let has_ops = groups.values().any(|group| !group.is_empty());
+                    logger::debug(&format!("Worker thread check: has_operations = {}, total_groups = {}", has_ops, groups.len()));
+                    has_ops
                 };
 
                 if !has_operations {
+                    logger::debug("Worker thread: no operations found, checking active modules");
+                    
                     // Check if all operations are complete
                     let active = match SafeOperations::lock_with_timeout(
                         &active_modules,
@@ -126,32 +138,39 @@ impl ParallelProcessor {
                         }
                     };
                     
+                    logger::debug(&format!("Worker thread: active modules count = {}", active.len()));
+                    
                     if active.is_empty() {
-                        break;
-                    }
-                    
-                    // Check if any active modules still have operations to process
-                    let any_remaining_ops = {
-                        match SafeOperations::lock_with_timeout(
-                            &module_groups,
-                            Duration::from_secs(1),
-                            "module_groups_check_remaining"
-                        ) {
-                            Ok(groups) => groups.values().any(|group| !group.is_empty()),
-                            Err(_) => {
-                                // If we can't check, assume no remaining operations
-                                false
+                        // Double-check that there are really no operations left
+                        let final_check = {
+                            match SafeOperations::lock_with_timeout(
+                                &module_groups,
+                                Duration::from_secs(1),
+                                "module_groups_final_check"
+                            ) {
+                                Ok(groups) => {
+                                    let has_ops = groups.values().any(|group| !group.is_empty());
+                                    logger::debug(&format!("Worker thread: final check - has_operations = {}, total_groups = {}", has_ops, groups.len()));
+                                    has_ops
+                                },
+                                Err(_) => false
                             }
+                        };
+                        
+                        if !final_check {
+                            logger::info("All operations completed, exiting worker thread");
+                            break;
+                        } else {
+                            // There are still operations, continue processing
+                            logger::debug("Worker thread: operations still exist, continuing");
+                            thread::sleep(Duration::from_millis(500)); // Increased sleep time to reduce lock contention
+                            continue;
                         }
-                    };
-                    
-                    if !any_remaining_ops {
-                        // No more operations to process, we can exit even if cleanup didn't complete
-                        logger::info("All operations completed, exiting worker thread");
-                        break;
                     }
                     
-                    thread::sleep(Duration::from_millis(100));
+                    // There are active modules, wait for them to complete
+                    logger::debug("Worker thread: waiting for active modules to complete");
+                    thread::sleep(Duration::from_millis(500)); // Increased sleep time to reduce lock contention
                     continue;
                 }
 
@@ -233,7 +252,7 @@ impl ParallelProcessor {
                             );
                         });
                     } else {
-                        thread::sleep(Duration::from_millis(100));
+                        thread::sleep(Duration::from_millis(500)); // Increased sleep time to reduce lock contention
                     }
                 } else {
                     thread::sleep(Duration::from_millis(100));
@@ -254,8 +273,10 @@ impl ParallelProcessor {
         results: Arc<Mutex<Vec<OperationResult>>>,
         active_modules: Arc<Mutex<HashMap<String, bool>>>,
     ) {
-        let _display_path = format_module_path(&module_path);
+        let display_path = format_module_path(&module_path);
+        logger::debug(&format!("Starting to process module: {}", display_path));
         
+        let mut operation_count = 0;
         loop {
             // Get the next operation for this module
             let operation = {
@@ -272,13 +293,19 @@ impl ParallelProcessor {
                 };
                 
                 if let Some(group) = groups.get_mut(&module_path) {
-                    group.take_next_operation()
+                    let op = group.take_next_operation();
+                    logger::debug(&format!("Module {}: took operation, remaining in group: {}", display_path, group.operations.len()));
+                    op
                 } else {
+                    logger::debug(&format!("Module {}: no group found", display_path));
                     None
                 }
             };
 
             if let Some(op) = operation {
+                operation_count += 1;
+                logger::debug(&format!("Module {}: processing operation {} (workspace: {:?})", display_path, operation_count, op.workspace));
+                
                 // Process the operation
                 let result = Self::process_operation(&op);
                 
@@ -298,14 +325,17 @@ impl ParallelProcessor {
                     results.push(result);
                 }
             } else {
+                logger::debug(&format!("Module {}: no more operations, processed {} total", display_path, operation_count));
                 break;
             }
         }
 
         // Mark this module as no longer active (non-blocking cleanup)
         // Use try_lock to avoid blocking, and if it fails, just log and continue
+        // The worker thread will eventually detect that the module is no longer active
         if let Ok(mut active) = active_modules.try_lock() {
             active.remove(&module_path);
+            logger::debug(&format!("Module {} removed from active modules", module_path));
         } else {
             // Cleanup failed, but that's okay - the worker thread will handle it
             logger::debug(&format!("Cleanup for module {} skipped (lock busy)", module_path));
