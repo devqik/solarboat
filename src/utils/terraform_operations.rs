@@ -36,6 +36,24 @@ pub struct OperationResult {
 
 /// Ensure terraform module is initialized before operations
 pub fn ensure_module_initialized(module_path: &str) -> Result<(), String> {    
+    // Check if .terraform directory exists to avoid unnecessary init
+    let terraform_dir = std::path::Path::new(module_path).join(".terraform");
+    if terraform_dir.exists() {
+        // Check if it's properly initialized by trying to list workspaces
+        let workspace_check = Command::new("terraform")
+            .arg("workspace")
+            .arg("list")
+            .current_dir(module_path)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+            
+        if workspace_check.is_ok() && workspace_check.unwrap().success() {
+            return Ok(()); // Already initialized
+        }
+    }
+    
+    // Initialize if needed
     let output = Command::new("terraform")
         .arg("init")
         .current_dir(module_path)
@@ -52,6 +70,22 @@ pub fn ensure_module_initialized(module_path: &str) -> Result<(), String> {
 
 /// Select a terraform workspace
 pub fn select_workspace(module_path: &str, workspace: &str) -> Result<(), String> {
+    // First check if we're already in the correct workspace
+    let current_workspace = Command::new("terraform")
+        .arg("workspace")
+        .arg("show")
+        .current_dir(module_path)
+        .output()
+        .map_err(|e| format!("Failed to get current workspace: {}", e))?;
+
+    if current_workspace.status.success() {
+        let current = String::from_utf8_lossy(&current_workspace.stdout).trim().to_string();
+        if current == workspace {
+            return Ok(()); // Already in the correct workspace
+        }
+    }
+
+    // Only select if we're not already in the correct workspace
     let mut cmd = Command::new("terraform");
     cmd.arg("workspace")
        .arg("select")
