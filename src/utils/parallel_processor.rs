@@ -117,7 +117,7 @@ impl ParallelProcessor {
                         }
                     };
                     let has_ops = groups.values().any(|group| !group.is_empty());
-                    logger::debug(&format!("Worker thread check: has_operations = {}, total_groups = {}", has_ops, groups.len()));
+                    // logger::debug(&format!("Worker thread check: has_operations = {}, total_groups = {}", has_ops, groups.len()));
                     has_ops
                 };
 
@@ -323,6 +323,22 @@ impl ParallelProcessor {
                         }
                     };
                     results.push(result);
+                }
+                
+                // Enhanced state lock verification between workspace operations
+                if operation_count > 1 {
+                    let workspace_name = op.workspace.as_deref().unwrap_or("default");
+                    logger::debug(&format!("Module {}: verifying state lock availability for workspace '{}'", display_path, workspace_name));
+                    
+                    // Wait up to 60 seconds for state lock to be released
+                    if crate::utils::terraform_operations::wait_for_state_lock_release(&module_path, Some(workspace_name), Duration::from_secs(60)) {
+                        logger::debug(&format!("Module {}: state lock verified available for workspace '{}'", display_path, workspace_name));
+                    } else {
+                        logger::warn(&format!("Module {}: state lock verification timeout for workspace '{}', proceeding anyway", display_path, workspace_name));
+                    }
+                    
+                    // Additional safety delay
+                    thread::sleep(Duration::from_secs(5));
                 }
             } else {
                 logger::debug(&format!("Module {}: no more operations, processed {} total", display_path, operation_count));
