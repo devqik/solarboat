@@ -2,6 +2,8 @@ use std::process::{Command, Stdio};
 use std::path::Path;
 use regex::Regex;
 use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::Duration;
+use std::thread;
 
 /// Represents a single terraform operation to be processed
 #[derive(Debug, Clone)]
@@ -34,6 +36,24 @@ pub struct OperationResult {
 
 /// Ensure terraform module is initialized before operations
 pub fn ensure_module_initialized(module_path: &str) -> Result<(), String> {    
+    // Check if .terraform directory exists to avoid unnecessary init
+    let terraform_dir = std::path::Path::new(module_path).join(".terraform");
+    if terraform_dir.exists() {
+        // Check if it's properly initialized by trying to list workspaces
+        let workspace_check = Command::new("terraform")
+            .arg("workspace")
+            .arg("list")
+            .current_dir(module_path)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+            
+        if workspace_check.is_ok() && workspace_check.unwrap().success() {
+            return Ok(()); // Already initialized
+        }
+    }
+    
+    // Initialize if needed
     let output = Command::new("terraform")
         .arg("init")
         .current_dir(module_path)
@@ -50,6 +70,22 @@ pub fn ensure_module_initialized(module_path: &str) -> Result<(), String> {
 
 /// Select a terraform workspace
 pub fn select_workspace(module_path: &str, workspace: &str) -> Result<(), String> {
+    // First check if we're already in the correct workspace
+    let current_workspace = Command::new("terraform")
+        .arg("workspace")
+        .arg("show")
+        .current_dir(module_path)
+        .output()
+        .map_err(|e| format!("Failed to get current workspace: {}", e))?;
+
+    if current_workspace.status.success() {
+        let current = String::from_utf8_lossy(&current_workspace.stdout).trim().to_string();
+        if current == workspace {
+            return Ok(()); // Already in the correct workspace
+        }
+    }
+
+    // Only select if we're not already in the correct workspace
     let mut cmd = Command::new("terraform");
     cmd.arg("workspace")
        .arg("select")
@@ -165,4 +201,43 @@ pub fn run_single_apply(module_path: &str, var_files: Option<&[String]>) -> Resu
         .map_err(|e| e.to_string())?;
 
     Ok(status.success())
+}
+
+
+pub fn check_state_lock_available(module_path: &str, workspace: Option<&str>) -> bool {
+    if let Some(ws) = workspace {
+        if let Err(_) = select_workspace(module_path, ws) {
+            return false;
+        }
+    }
+    
+    let result = Command::new("terraform")
+        .arg("state")
+        .arg("list")
+        .current_dir(module_path)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+        
+    result.is_ok() && result.unwrap().success()
+}
+
+pub fn wait_for_state_lock_release(module_path: &str, workspace: Option<&str>, max_wait: Duration) -> bool {
+    use std::time::Instant;
+    
+    let start = Instant::now();
+    let mut attempt = 0;
+    let max_attempts = 10;
+    
+    while start.elapsed() < max_wait && attempt < max_attempts {
+        if check_state_lock_available(module_path, workspace) {
+            return true; // State lock is available
+        }
+        
+        attempt += 1;
+        let delay = std::cmp::min(2u64.pow(attempt), 30); // Exponential backoff: 2, 4, 8, 16, 30, 30, ...
+        thread::sleep(Duration::from_secs(delay));
+    }
+    
+    false // Timeout reached
 }

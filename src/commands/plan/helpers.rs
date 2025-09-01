@@ -94,6 +94,7 @@ pub fn run_terraform_plan(
                     watch,
                     skip_init: false, // Always initialize in parallel processor
                 };
+                logger::debug(&format!("Adding operation for workspace: {}", workspace));
                 processor.add_operation(operation).map_err(|e| format!("Failed to add operation: {}", e))?;
             }
         }
