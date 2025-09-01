@@ -137,16 +137,18 @@ fn test_environment_config() {
     // Test dev environment
     std::env::set_var("SOLARBOAT_ENV", "dev");
     let loader = ConfigLoader::new(temp_dir.path());
-    let config = loader.load().unwrap().unwrap();
+    let config = loader.load().unwrap();
+    assert!(config.is_some());
+    let config = config.unwrap();
     assert_eq!(config.global.ignore_workspaces, vec!["prod", "staging"]);
-    // Note: var_files field has been removed
     
     // Test prod environment
     std::env::set_var("SOLARBOAT_ENV", "prod");
     let loader = ConfigLoader::new(temp_dir.path());
-    let config = loader.load().unwrap().unwrap();
+    let config = loader.load().unwrap();
+    assert!(config.is_some());
+    let config = config.unwrap();
     assert_eq!(config.global.ignore_workspaces, vec!["dev", "test"]);
-    // Note: var_files field has been removed
     
     // Clean up environment variable
     std::env::remove_var("SOLARBOAT_ENV");
