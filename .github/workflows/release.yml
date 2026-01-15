@@ -46,9 +46,17 @@ jobs:
     strategy:
       matrix:
         include:
+          # Linux x86_64
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
+          # Linux ARM64
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+          # macOS x86_64
           - target: x86_64-apple-darwin
+            os: macos-13
+          # macOS ARM64
+          - target: aarch64-apple-darwin
             os: macos-latest
     
     steps:
@@ -59,21 +67,20 @@ jobs:
         with:
           targets: ${{ matrix.target }}
       
+      - name: Install cross-compilation tools (Linux ARM64)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+      
       - name: Build binary
         run: cargo build --release --target ${{ matrix.target }}
       
       - name: Package Binary (Unix)
-        if: matrix.os != 'windows-latest'
         run: |
           cd target/${{ matrix.target }}/release
           tar czvf ../../../solarboat-${{ matrix.target }}.tar.gz solarboat
-          cd -
-      
-      - name: Package Binary (Windows)
-        if: matrix.os == 'windows-latest'
-        run: |
-          cd target/${{ matrix.target }}/release
-          7z a ../../../solarboat-${{ matrix.target }}.zip solarboat.exe
           cd -
       
       - name: Upload artifacts
@@ -82,7 +89,6 @@ jobs:
           name: binaries-${{ matrix.target }}
           path: |
             solarboat-*.tar.gz
-            solarboat-*.zip
 
   create-release:
     name: Create Release
@@ -102,7 +108,69 @@ jobs:
         with:
           files: |
             solarboat-*.tar.gz
-            solarboat-*.zip
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-homebrew:
+    name: Update Homebrew Formula
+    needs: create-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: binaries-*
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -la solarboat-*.tar.gz
+
+      - name: Calculate SHA256 hashes
+        id: hashes
+        run: |
+          MACOS_X86_SHA256=$(sha256sum solarboat-x86_64-apple-darwin.tar.gz | cut -d' ' -f1)
+          MACOS_ARM_SHA256=$(sha256sum solarboat-aarch64-apple-darwin.tar.gz | cut -d' ' -f1)
+          LINUX_X86_SHA256=$(sha256sum solarboat-x86_64-unknown-linux-gnu.tar.gz | cut -d' ' -f1)
+          LINUX_ARM_SHA256=$(sha256sum solarboat-aarch64-unknown-linux-gnu.tar.gz | cut -d' ' -f1)
+          
+          echo "macos_x86_sha256=$MACOS_X86_SHA256" >> $GITHUB_OUTPUT
+          echo "macos_arm_sha256=$MACOS_ARM_SHA256" >> $GITHUB_OUTPUT
+          echo "linux_x86_sha256=$LINUX_X86_SHA256" >> $GITHUB_OUTPUT
+          echo "linux_arm_sha256=$LINUX_ARM_SHA256" >> $GITHUB_OUTPUT
+          
+          echo "macOS x86_64 SHA256: $MACOS_X86_SHA256"
+          echo "macOS ARM64 SHA256: $MACOS_ARM_SHA256"
+          echo "Linux x86_64 SHA256: $LINUX_X86_SHA256"
+          echo "Linux ARM64 SHA256: $LINUX_ARM_SHA256"
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Update Homebrew Formula
+        env:
+          GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          MACOS_X86_SHA256="${{ steps.hashes.outputs.macos_x86_sha256 }}"
+          MACOS_ARM_SHA256="${{ steps.hashes.outputs.macos_arm_sha256 }}"
+          LINUX_X86_SHA256="${{ steps.hashes.outputs.linux_x86_sha256 }}"
+          LINUX_ARM_SHA256="${{ steps.hashes.outputs.linux_arm_sha256 }}"
+
+          echo "Triggering Homebrew formula update for version $VERSION"
+
+          curl --fail -X POST \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Content-Type: application/json" \
+            "https://api.github.com/repos/devqik/homebrew-solarboat/dispatches" \
+            -d "{\"event_type\":\"update-formula\",\"client_payload\":{\"version\":\"$VERSION\",\"macos_x86_sha256\":\"$MACOS_X86_SHA256\",\"macos_arm_sha256\":\"$MACOS_ARM_SHA256\",\"linux_x86_sha256\":\"$LINUX_X86_SHA256\",\"linux_arm_sha256\":\"$LINUX_ARM_SHA256\"}}"
+
+          echo "✅ Homebrew formula update triggered successfully!"
+          echo "Check https://github.com/devqik/homebrew-solarboat/actions for progress."
