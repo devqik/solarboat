@@ -8,20 +8,7 @@
 
 Solarboat is a modern CLI for Infrastructure as Code (IaC) and GitOps workflows, providing intelligent Terraform operations, automatic dependency detection, and seamless stateful/stateless module handling.
 
-<table>
-<tr>
-<td width="50%">
-
-## Why "Solarboat"?
-
-Inspired by the Ancient Egyptian solar boats that carried Pharaohs through their celestial journey, this CLI tool is your vessel through the complexities of infrastructure management. Let Solarboat handle the operational journey, so you can focus on writing code.
-
-</td>
-<td width="50%">
-<img src="./icon.jpg" alt="Solarboat Logo" width="100%">
-</td>
-</tr>
-</table>
+<img src="./solarboat.png" alt="Solarboat Logo" width="100%">
 
 ---
 
@@ -48,7 +35,7 @@ Inspired by the Ancient Egyptian solar boats that carried Pharaohs through their
 ```bash
 cargo install solarboat
 # Or install a specific version
-cargo install solarboat --version 0.8.8
+cargo install solarboat --version 0.8.9
 ```
 
 **From Release Binaries:**
@@ -226,13 +213,13 @@ jobs:
           fetch-depth: 0
 
       - name: Scan for Changes
-        uses: devqik/solarboat@v0.8.8
+        uses: devqik/solarboat@v0.8.9
         with:
           command: scan
 
       - name: Plan Infrastructure
         if: github.event_name == 'pull_request'
-        uses: devqik/solarboat@v0.8.8
+        uses: devqik/solarboat@v0.8.9
         with:
           command: plan
           output-dir: terraform-plans
@@ -241,7 +228,7 @@ jobs:
 
       - name: Apply Changes
         if: github.ref == 'refs/heads/main'
-        uses: devqik/solarboat@v0.8.8
+        uses: devqik/solarboat@v0.8.9
         with:
           command: apply
           apply-dryrun: false
@@ -271,12 +258,12 @@ jobs:
 
       - name: Plan Infrastructure Changes
         if: github.event_name == 'pull_request'
-        uses: devqik/solarboat@v0.8.8
+        uses: devqik/solarboat@v0.8.9
         with:
           command: plan
           config: ./infrastructure/solarboat.json
           terraform-version: "1.8.0"
-          solarboat-version: "v0.8.8"
+          solarboat-version: "v0.8.9"
           parallel: 3
           ignore-workspaces: dev,test
           output-dir: terraform-plans
@@ -284,7 +271,7 @@ jobs:
 
       - name: Apply Infrastructure Changes
         if: github.ref == 'refs/heads/main'
-        uses: devqik/solarboat@v0.8.8
+        uses: devqik/solarboat@v0.8.9
         with:
           command: apply
           apply-dryrun: false
@@ -312,7 +299,7 @@ For advanced use cases, you can manually specify commit ranges:
 
 ```yaml
 - name: Custom Commit Comparison
-  uses: devqik/solarboat@v0.8.8
+  uses: devqik/solarboat@v0.8.9
   with:
     command: plan
     base-commit: abc1234
@@ -327,7 +314,7 @@ When no commit information is provided, Solarboat runs in local mode:
 
 ```yaml
 - name: Local Development Mode
-  uses: devqik/solarboat@v0.8.8
+  uses: devqik/solarboat@v0.8.9
   with:
     command: plan
     recent-commits: 5 # Check last 5 commits for changes
@@ -373,7 +360,7 @@ When no commit information is provided, Solarboat runs in local mode:
 ```yaml
 - name: Plan Infrastructure
   id: plan
-  uses: devqik/solarboat@v0.8.8
+  uses: devqik/solarboat@v0.8.9
   with:
     command: plan
     github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -389,14 +376,14 @@ When no commit information is provided, Solarboat runs in local mode:
 
 ```yaml
 - name: Plan Staging
-  uses: devqik/solarboat@v0.8.8
+  uses: devqik/solarboat@v0.8.9
   with:
     command: plan
     config: ./configs/solarboat.staging.json
     path: ./environments/staging
 
 - name: Plan Production
-  uses: devqik/solarboat@v0.8.8
+  uses: devqik/solarboat@v0.8.9
   with:
     command: plan
     config: ./configs/solarboat.prod.json
@@ -408,7 +395,7 @@ When no commit information is provided, Solarboat runs in local mode:
 
 ```yaml
 - name: Apply with Error Handling
-  uses: devqik/solarboat@v0.8.8
+  uses: devqik/solarboat@v0.8.9
   with:
     command: apply
     apply-dryrun: false
