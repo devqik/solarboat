@@ -165,7 +165,7 @@ jobs:
 
           echo "Triggering Homebrew formula update for version $VERSION"
 
-          curl -X POST \
+          curl --fail -X POST \
             -H "Accept: application/vnd.github.v3+json" \
             -H "Authorization: token $GITHUB_TOKEN" \
             -H "Content-Type: application/json" \
